@@ -9,17 +9,23 @@ const q = (s) => JSON.stringify(String(s)); // valid string literal in JS, Pytho
 const ps = (s) => "'" + String(s).replace(/['‘’‚‛]/g, '$&$&') + "'";
 // Methods come from saved/imported data: allow only an RFC 9110 token (letters,
 // digits, a few symbols; no spaces, quotes or ;$`) and fall back to GET.
-const httpMethod = (m) => /^[A-Za-z0-9!#%&*+.^_|~-]+$/.test(m || '') ? m.toUpperCase() : 'GET';
+const isToken = (s) => /^[A-Za-z0-9!#%&*+.^_|~-]+$/.test(s || '');
+const httpMethod = (m) => isToken(m) ? m.toUpperCase() : 'GET';
+// Shell snippets: header names must be tokens too (HTTPie reads '=', ':=', '@' in an
+// item as a body field or file upload), and only http(s) URLs are emitted.
+const tokenHeaders = (hs) => hs.filter(([k]) => isToken(k));
+const notHTTP = (u) => /^https?:\/\//i.test(u || '') ? '' : '# Only http(s) URLs can be exported as a shell command.';
 
 const CODE_LANGS = {
   curl: {
     label: 'cURL',
     gen: (r) => {
+      if (notHTTP(r.url)) return notHTTP(r.url);
       const parts = ['curl'];
       const method = httpMethod(r.method);
       if (method !== 'GET' || r.body) parts.push('-X ' + sh(method));
-      parts.push(sh(r.url));
-      for (const [k, v] of r.headers) parts.push('-H ' + sh(k + ': ' + v));
+      parts.push('--url ' + sh(r.url));
+      for (const [k, v] of tokenHeaders(r.headers)) parts.push('-H ' + sh(k + ': ' + v));
       if (r.body) parts.push('--data-raw ' + sh(r.body));
       if (r.followRedirects) parts.push('-L');
       if (r.insecure) parts.push('-k');
@@ -68,11 +74,12 @@ const CODE_LANGS = {
   httpie: {
     label: 'HTTPie',
     gen: (r) => {
+      if (notHTTP(r.url)) return notHTTP(r.url);
       const parts = ['http'];
       if (r.followRedirects) parts.push('--follow');
       if (r.insecure) parts.push('--verify=no');
-      parts.push(sh(httpMethod(r.method)), sh(r.url));
-      for (const [k, v] of r.headers) parts.push(sh(k + ':' + v));
+      parts.push('--', sh(httpMethod(r.method)), sh(r.url));
+      for (const [k, v] of tokenHeaders(r.headers)) parts.push(sh(k + ':' + v));
       const cmd = parts.join(' \\\n  ');
       return r.body ? `printf '%s' ${sh(r.body)} | ${cmd}` : cmd;
     },

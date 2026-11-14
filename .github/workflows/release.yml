@@ -9,7 +9,30 @@ permissions:
   contents: write
 
 jobs:
+  # Release gate: unit, integration and e2e (real binary, headless) tests on
+  # every OS we ship. No installers are built unless all of these pass.
+  test:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Linux webview libs (window.go compiles against them)
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
+      - run: go test -tags webkit2_41 ./...
+      - run: node --test server/codegen.test.js server/postman.test.js
+
   build:
+    needs: test
     strategy:
       fail-fast: false
       matrix:

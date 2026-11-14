@@ -24,6 +24,10 @@ Build locally: `go install github.com/wailsapp/wails/v2/cmd/wails@v2.10.2`, then
 to add it to your app menu. The window is a native webview over the same localhost:7071
 server; closing it stops apiperf.
 
+Tests: `go test ./...` (includes `e2e/`, which builds the real binary and drives it headless;
+close the app first so port 7071 is free) and `node --test server/*.test.js`. A release tag only
+builds installers after these pass on Linux, macOS and Windows.
+
 Data lives in the per-user folder: `~/.local/share/apiperf` (Linux),
 `%AppData%\apiperf` (Windows), `~/Library/Application Support/apiperf` (macOS).
 

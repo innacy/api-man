@@ -16,7 +16,7 @@ test('curl quotes survive a real shell', () => {
   // Replace the program with printf so the shell shows exactly the arguments curl would get.
   const out = execFileSync('sh', ['-c', code.replace(/^curl/, "printf '%s\\n'")]).toString();
   assert.deepEqual(out.trimEnd().split('\n'), [
-    '-X', 'POST', req.url,
+    '-X', 'POST', '--url', req.url,
     '-H', 'Content-Type: application/json', '-H', `X-Quote: say "hi" and 'bye'`,
     '--data-raw', ...req.body.split('\n'), '-k',
   ]);
@@ -39,7 +39,7 @@ test('PowerShell doubles every quote variant it recognises', () => {
 });
 
 test('GET without body omits -X and data', () => {
-  assert.equal(CODE_LANGS.curl.gen({ method: 'GET', url: 'http://h/', headers: [], body: '', followRedirects: true, insecure: false, timeoutMs: 30000 }), "curl \\\n  'http://h/' \\\n  -L");
+  assert.equal(CODE_LANGS.curl.gen({ method: 'GET', url: 'http://h/', headers: [], body: '', followRedirects: true, insecure: false, timeoutMs: 30000 }), "curl \\\n  --url 'http://h/' \\\n  -L");
 });
 
 test('JS snippet is valid JavaScript with exact values', () => {
@@ -61,4 +61,26 @@ test('every language produces output and embeds the URL', () => {
   }
   assert.match(CODE_LANGS.go.gen(req), /InsecureSkipVerify: true/);
   assert.match(CODE_LANGS.python.gen(req), /verify=False/);
+});
+
+test('a hostile URL or header name cannot become a curl/HTTPie option or field', () => {
+  const evil = { ...req, body: '', url: 'http://h/', headers: [['x=@/etc/passwd', 'v'], ['Ok', 'y']] };
+  const run = (id, r) => execFileSync('sh', ['-c', CODE_LANGS[id].gen(r).replace(/^(curl|http)/, "printf '%s\\n'")]).toString().trimEnd().split('\n');
+  const curl = run('curl', evil);
+  assert.equal(curl[curl.indexOf('http://h/') - 1], '--url', 'curl URL must follow --url');
+  const httpie = run('httpie', evil);
+  assert.equal(httpie[httpie.indexOf('http://h/') - 2], '--', 'HTTPie positionals must follow --');
+  for (const id of ['curl', 'httpie']) {
+    const code = CODE_LANGS[id].gen(evil);
+    assert.ok(!code.includes('passwd'), `${id} kept a non-token header name: ${code}`);
+    assert.match(code, /Ok: ?y/, id);
+    assert.ok(!CODE_LANGS[id].gen({ ...evil, url: '-o/tmp/pwned' }).includes('pwned'), `${id} emitted an option-like URL`);
+  }
+});
+
+test('non-http(s) URLs are refused in shell snippets', () => {
+  for (const id of ['curl', 'httpie']) {
+    const code = CODE_LANGS[id].gen({ ...req, url: 'file:///etc/passwd' });
+    assert.ok(!code.includes('passwd'), `${id}: ${code}`);
+  }
 });
