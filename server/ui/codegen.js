@@ -79,7 +79,9 @@ const CODE_LANGS = {
       if (r.followRedirects) parts.push('--follow');
       if (r.insecure) parts.push('--verify=no');
       parts.push('--', sh(httpMethod(r.method)), sh(r.url));
-      for (const [k, v] of tokenHeaders(r.headers)) parts.push(sh(k + ':' + v));
+      // A value starting with = or @ would form ':=', ':=@' or ':@' (JSON field / file
+      // read); HTTPie's backslash escape keeps it a literal header value.
+      for (const [k, v] of tokenHeaders(r.headers)) parts.push(sh(k + ':' + String(v).replace(/^[=@]/, '\\$&')));
       const cmd = parts.join(' \\\n  ');
       return r.body ? `printf '%s' ${sh(r.body)} | ${cmd}` : cmd;
     },

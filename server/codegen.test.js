@@ -84,3 +84,11 @@ test('non-http(s) URLs are refused in shell snippets', () => {
     assert.ok(!code.includes('passwd'), `${id}: ${code}`);
   }
 });
+
+test('HTTPie header values starting with = or @ are escaped, not read as file/JSON items', () => {
+  const r = { ...req, body: '', url: 'http://h/', headers: [['X', '=@/etc/passwd'], ['Y', '@/etc/passwd'], ['Z', 'a=@b']] };
+  const args = execFileSync('sh', ['-c', CODE_LANGS.httpie.gen(r).replace(/^http/, "printf '%s\\n'")]).toString().trimEnd().split('\n');
+  assert.ok(args.includes('X:\\=@/etc/passwd'), args.join(' '));
+  assert.ok(args.includes('Y:\\@/etc/passwd'), args.join(' '));
+  assert.ok(args.includes('Z:a=@b'), args.join(' ')); // only the leading separator matters
+});
