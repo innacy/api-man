@@ -23,6 +23,9 @@ func TestFullRamp(t *testing.T) {
 	var hits atomic.Int64
 	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
+		// Windows' monotonic clock ticks every ~0.5ms, so an instant localhost
+		// reply measures 0µs there; 1ms keeps latencies measurable on every OS.
+		time.Sleep(time.Millisecond)
 		w.WriteHeader(200)
 	}))
 	defer target.Close()

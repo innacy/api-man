@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/http"
 	"net/http/httptest"
+	"runtime"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -108,7 +109,10 @@ func TestProbeTiming(t *testing.T) {
 	if p.Cold == nil || p.Warm == nil {
 		t.Fatalf("want cold+warm phases, got %+v", p)
 	}
-	if p.Cold.Reused || p.Cold.TLSMs <= 0 || p.Cold.ConnectMs <= 0 {
+	// A loopback connect is faster than Windows' ~0.5ms clock tick, so it can
+	// read 0 there; the TLS handshake is still long enough to measure.
+	connectMeasured := p.Cold.ConnectMs > 0 || runtime.GOOS == "windows"
+	if p.Cold.Reused || p.Cold.TLSMs <= 0 || !connectMeasured {
 		t.Fatalf("cold should open a new TLS connection: %+v", *p.Cold)
 	}
 	if !p.Warm.Reused || p.Warm.TLSMs != 0 || p.Warm.ConnectMs != 0 {
