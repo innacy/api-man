@@ -53,9 +53,11 @@ jobs:
         if: runner.os == 'Windows'
         shell: bash
         run: |
-          echo "C:/Program Files (x86)/NSIS" >> "$GITHUB_PATH"
+          choco install nsis -y --no-progress
           export PATH="/c/Program Files (x86)/NSIS:$PATH"
+          makensis -VERSION
           wails build -s -skipbindings -nsis
+          ls build/bin/*-installer.exe  # wails skips NSIS silently; fail loudly instead
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:

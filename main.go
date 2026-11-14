@@ -127,7 +127,7 @@ func dataDir() string {
 		}
 	}
 	dir := filepath.Join(base, "apiperf")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
+	if err := os.MkdirAll(dir, 0o700); err != nil {
 		log.Fatalf("apiperf: cannot create %s: %v", dir, err)
 	}
 	return dir
