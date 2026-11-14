@@ -56,7 +56,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-          wails build -s -skipbindings -tags webkit2_41
+          wails build -s -skipbindings -tags webkit2_41 -ldflags "-X main.version=$VERSION"
           mkdir -p build/linux
           sed 's|@BIN@|apiperf|' deploy/apiperf.desktop > build/linux/apiperf.desktop
           go run github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.41.1 pkg -p deb -t build/bin/
@@ -67,7 +67,7 @@ jobs:
       - name: macOS → .app zip (universal)
         if: runner.os == 'macOS'
         run: |
-          wails build -s -skipbindings -platform darwin/universal
+          wails build -s -skipbindings -platform darwin/universal -ldflags "-X main.version=$VERSION"
           APP=$(ls -d build/bin/*.app)
           codesign --force --deep --sign - "$APP"
           ditto -c -k --keepParent "$APP" build/bin/API-Man-macos-universal.zip
@@ -79,7 +79,7 @@ jobs:
           choco install nsis -y --no-progress
           export PATH="/c/Program Files (x86)/NSIS:$PATH"
           makensis -VERSION
-          wails build -s -skipbindings -nsis
+          wails build -s -skipbindings -nsis -ldflags "-X main.version=$VERSION"
           ls build/bin/*-installer.exe  # wails skips NSIS silently; fail loudly instead
 
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2

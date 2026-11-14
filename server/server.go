@@ -151,6 +151,8 @@ func New(st *store.Store, lib *store.Library, o *orch.Orchestrator, hub *Hub) ht
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("POST /api/send", s.handleSend)
 	mux.HandleFunc("POST /api/curl", handleParseCurl)
+	mux.HandleFunc("GET /api/update", handleUpdate)
+	mux.HandleFunc("POST /api/update/open", handleOpenUpdate)
 	s.libraryRoutes(mux)
 
 	return localOnly(mux)

@@ -20,9 +20,13 @@ import (
 	"apiperf/store"
 )
 
+// version is stamped by CI: -ldflags "-X main.version=0.2.0".
+var version = "dev"
+
 func main() {
 	headless := flag.Bool("headless", false, "serve http://localhost:7071 only; don't open the app window")
 	flag.Parse()
+	server.Version = version
 	raiseFDLimit()
 
 	// Acquire the port first: it's the process mutex for "am I the only

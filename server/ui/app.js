@@ -807,3 +807,13 @@ let savedAccent = 'amber';
 try { savedAccent = localStorage.getItem('apiperf-accent') || 'amber'; } catch {}
 applyAccent(savedAccent);
 route();
+
+// Update check: the server asks GitHub; the window can't open tabs, so the
+// server opens the release page in the system browser.
+getJSON('/api/update').then((u) => {
+  if (!u || !u.available) return;
+  const b = $('#update');
+  b.textContent = `Update available: ${u.latest}`;
+  b.classList.remove('hidden');
+  b.onclick = () => fetch('/api/update/open', { method: 'POST' });
+});
