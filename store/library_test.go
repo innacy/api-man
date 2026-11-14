@@ -6,6 +6,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"runtime"
 	"testing"
 )
 
@@ -21,6 +22,9 @@ func openLib(t *testing.T) (*Library, string) {
 }
 
 func TestLibraryFileIsPrivate(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows has no Unix permission bits; Go reports 0666/0777")
+	}
 	_, path := openLib(t)
 	for p, want := range map[string]os.FileMode{path: 0o600, filepath.Dir(path): 0o700} {
 		st, err := os.Stat(p)

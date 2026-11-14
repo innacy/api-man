@@ -28,7 +28,14 @@ jobs:
       - name: Linux webview libs (window.go compiles against them)
         if: runner.os == 'Linux'
         run: sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.1-dev
-      - run: go test -tags webkit2_41 ./...
+      - name: go test (failures become annotations, readable without logs)
+        shell: bash
+        run: |
+          set -o pipefail
+          go test -tags webkit2_41 ./... 2>&1 | tee test.log || {
+            grep -E -- '--- FAIL|_test.go:[0-9]+|^panic|^FAIL' test.log | head -40 | sed 's/^/::error::/'
+            exit 1
+          }
       - run: node --test server/codegen.test.js server/postman.test.js
 
   build:
