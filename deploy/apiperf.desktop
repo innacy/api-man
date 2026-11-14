@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=API-Man
+Comment=Send API requests and load-test them (apiperf)
+Exec=@BIN@
+Icon=apiperf
+Categories=Development;
+StartupWMClass=apiperf

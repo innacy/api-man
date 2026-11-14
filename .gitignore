@@ -4,3 +4,6 @@ apiperf
 *.db-shm
 .playwright-mcp/*
 node_modules/*
+build/bin/
+frontend/
+build/linux/

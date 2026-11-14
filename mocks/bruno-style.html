@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="en" class="dark" data-accent="amber" data-lightbg="white">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>API-Man mocks</title>
+<style>
+@font-face { font-family:'IBM Plex Sans'; font-weight:400; src:url(../server/ui/fonts/ibm-plex-sans-latin-400-normal.woff2) format('woff2') }
+@font-face { font-family:'IBM Plex Sans'; font-weight:500; src:url(../server/ui/fonts/ibm-plex-sans-latin-500-normal.woff2) format('woff2') }
+@font-face { font-family:'IBM Plex Sans'; font-weight:600; src:url(../server/ui/fonts/ibm-plex-sans-latin-600-normal.woff2) format('woff2') }
+@font-face { font-family:'JetBrains Mono'; font-weight:400 500; src:url(../server/ui/fonts/jetbrains-mono-latin-400-normal.woff2) format('woff2') }
+/* Tokens modelled on Bruno's open-source dark/light themes (neutral greys, warm accent). */
+:root {
+  --bg:#ffffff; --mantle:#f8f8f8; --surface:#f1f1f1; --surface2:#e5e5e5; --fg:#343434; --sub:#666; --muted:#9b9b9b;
+  --b0:#efefef; --b1:#e5e5e5; --b2:#ccc; --accent:#b96f1d; --accent-soft:rgba(185,111,29,.12); --onaccent:#fff;
+  --get:#16a34a; --post:#6366f1; --put:#d97706; --patch:#d97706; --del:#dc2626; --ok:#16a34a;
+  --j-k:#7c3aed; --j-s:#b45309; --j-n:#0369a1; --j-b:#dc2626;
+  --mono:'JetBrains Mono',ui-monospace,monospace;
+}
+html[data-lightbg=bone]:not(.dark) { --bg:#f4f1ea; --mantle:#efebe2; --surface:#e9e4d9; --surface2:#ddd6c8; --b0:#e6e0d4; --b1:#ddd6c8; --b2:#cbc3b3 }
+html.dark { --bg:#1e1e1e; --mantle:#222224; --surface:#26292b; --surface2:#333; --fg:#d4d4d4; --sub:#bbb; --muted:#8a8a8a;
+  --b0:#2a2a2a; --b1:#333; --b2:#444; --accent:#d9a342; --accent-soft:rgba(217,163,66,.14); --onaccent:#1e1e1e;
+  --get:#4ade80; --post:#818cf8; --put:#fbbf24; --patch:#fbbf24; --del:#f87171; --ok:#4ade80;
+  --j-k:#c4b5fd; --j-s:#fcd34d; --j-n:#f9a8d4; --j-b:#fca5a5; color-scheme:dark }
+html[data-accent=violet] { --accent:#6d28d9; --accent-soft:rgba(109,40,217,.11) } html.dark[data-accent=violet] { --accent:#a78bfa; --accent-soft:rgba(167,139,250,.14) }
+html[data-accent=teal] { --accent:#0f766e; --accent-soft:rgba(15,118,110,.11) } html.dark[data-accent=teal] { --accent:#2dd4bf; --accent-soft:rgba(45,212,191,.13) }
+html[data-accent=rose] { --accent:#be185d; --accent-soft:rgba(190,24,93,.1) } html.dark[data-accent=rose] { --accent:#f472b6; --accent-soft:rgba(244,114,182,.13) }
+html[data-accent=blue] { --accent:#1d4ed8; --accent-soft:rgba(29,78,216,.1) } html.dark[data-accent=blue] { --accent:#60a5fa; --accent-soft:rgba(96,165,250,.13) }
+
+* { box-sizing:border-box }
+body { margin:0; background:var(--mantle); color:var(--fg); font:13px/1.45 'IBM Plex Sans',system-ui,sans-serif }
+h2 { font-size:15px; margin:2.2rem 0 .3rem } h2 + p { margin:0 0 1rem; color:var(--sub) }
+.page { max-width:1440px; margin:0 auto; padding:16px 24px 64px }
+.ctl { position:sticky; top:0; z-index:20; display:flex; gap:1.2rem; flex-wrap:wrap; align-items:center; padding:10px 24px; background:var(--bg); border-bottom:1px solid var(--b1) }
+.ctl b { font-weight:600 } .ctl label { display:flex; gap:.4rem; align-items:center; color:var(--sub) }
+button { font:inherit; color:inherit; cursor:pointer; border:0; background:none }
+.btn { border:1px solid var(--b2); border-radius:4px; padding:.3rem .7rem; background:var(--bg) } .btn:hover { border-color:var(--muted) }
+.btn.pri { background:var(--accent); color:var(--onaccent); border-color:transparent; font-weight:500 }
+.ico { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; flex:none }
+.grid3 { display:grid; grid-template-columns:repeat(auto-fit,minmax(300px,1fr)); gap:16px }
+.card { background:var(--bg); border:1px solid var(--b1); border-radius:6px; padding:14px }
+.card h3 { margin:0 0 .2rem; font-size:13px } .card p { margin:0 0 .9rem; color:var(--sub); font-size:12px }
+.m { font:600 11px var(--mono) } .m.GET{color:var(--get)} .m.POST{color:var(--post)} .m.PUT{color:var(--put)} .m.PATCH{color:var(--patch)} .m.DELETE{color:var(--del)}
+
+/* ---------- accent pickers ---------- */
+.sw { width:14px; height:14px; border-radius:50%; background:var(--c); flex:none; display:inline-block }
+.dots { display:flex; gap:7px } .dots .sw { width:16px; height:16px; outline:2px solid transparent; outline-offset:2px; cursor:pointer } .dots .sw.on { outline-color:var(--c) }
+.dd { position:relative; display:inline-block }
+.dd > .btn { display:flex; gap:.45rem; align-items:center }
+.pop { position:absolute; top:calc(100% + 6px); right:0; min-width:200px; background:var(--bg); border:1px solid var(--b1); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:6px; z-index:5; display:none }
+.dd.open .pop { display:block }
+.pop .row { display:flex; gap:.6rem; align-items:center; width:100%; padding:.4rem .5rem; border-radius:4px; text-align:left } .pop .row:hover { background:var(--surface) }
+.pop .row .chk { margin-left:auto; color:var(--accent); visibility:hidden } .pop .row.on .chk { visibility:visible }
+.pop hr { border:0; border-top:1px solid var(--b1); margin:6px 0 } .pop .lbl { font-size:11px; color:var(--muted); padding:.2rem .5rem; text-transform:uppercase; letter-spacing:.04em }
+.seg2 { display:flex; border:1px solid var(--b1); border-radius:4px; margin:.2rem .5rem .4rem } .seg2 button { flex:1; padding:.25rem } .seg2 button.on { background:var(--surface); font-weight:600 }
+.swrow { display:flex; gap:8px; padding:.3rem .5rem .5rem } .swrow .sw { width:20px; height:20px; cursor:pointer; outline:2px solid transparent; outline-offset:2px } .swrow .sw.on { outline-color:var(--c) }
+
+/* ---------- light bg compare ---------- */
+.cmp { display:grid; grid-template-columns:1fr 1fr; gap:16px } @media (max-width:800px){ .cmp { grid-template-columns:1fr } }
+.mini { border:1px solid #ccc; border-radius:6px; overflow:hidden; color:#343434; font-size:12px }
+.mini .tb { display:flex; justify-content:space-between; padding:8px 12px; border-bottom:1px solid var(--mb) ; background:var(--mm) }
+.mini .bd { display:grid; grid-template-columns:150px 1fr; min-height:170px; background:var(--mbg) }
+.mini .sd { background:var(--mm); border-right:1px solid var(--mb); padding:8px } .mini .sd div { padding:3px 4px; border-radius:3px } .mini .sd .on { background:var(--msel) }
+.mini .mn { padding:10px } .mini .url { display:flex; gap:6px; border:1px solid var(--mb); border-radius:4px; padding:5px 8px; background:var(--minput) }
+.mini .send { margin-left:auto; background:#b96f1d; color:#fff; border-radius:3px; padding:0 8px }
+.mini pre { margin:10px 0 0; font:11px var(--mono); background:var(--minput); border:1px solid var(--mb); border-radius:4px; padding:8px }
+
+/* ---------- app skeleton (Bruno-style) ---------- */
+.app { height:760px; display:grid; grid-template-rows:38px 1fr 26px; background:var(--bg); border:1px solid var(--b1); border-radius:8px; overflow:hidden }
+.title { display:flex; align-items:center; gap:10px; padding:0 12px; border-bottom:1px solid var(--b0); background:var(--mantle) }
+.title .ws { display:flex; align-items:center; gap:6px; font-weight:500 } .title .mid { margin:0 auto; display:flex; align-items:center; gap:7px; font:600 13px var(--mono) }
+.brand { width:18px; height:18px; border-radius:4px; background:var(--accent); display:grid; place-items:center } .brand svg { stroke:var(--onaccent) }
+.title .r { display:flex; gap:10px; color:var(--sub) }
+.body { display:grid; grid-template-columns:260px 1fr; min-height:0 }
+.side { display:flex; flex-direction:column; border-right:1px solid var(--b1); background:var(--mantle); min-height:0 }
+.sh { display:flex; align-items:center; gap:8px; padding:8px 12px; font-weight:600 } .sh .sp { margin-left:auto; display:flex; gap:8px; color:var(--sub) }
+.tree { flex:1; overflow:auto; padding:2px 0 } .ti { display:flex; align-items:center; gap:6px; height:28px; padding-right:10px; cursor:pointer; white-space:nowrap; overflow:hidden }
+.ti:hover { background:var(--surface) } .ti.on { background:var(--surface2) } .ti .nm { overflow:hidden; text-overflow:ellipsis } .ti .m { width:44px; text-align:left; flex:none }
+.ti.d1 { padding-left:12px } .ti.d2 { padding-left:30px } .ti.d3 { padding-left:48px; border-left:0 }
+.sfoot > div { display:flex; align-items:center; gap:8px; padding:8px 12px; border-top:1px solid var(--b1); font-weight:500 } .sfoot .sp { margin-left:auto; color:var(--sub) }
+.main { display:grid; grid-template-rows:44px 36px 52px 1fr; min-width:0; min-height:0 }
+.ch { display:flex; align-items:center; gap:10px; padding:0 14px; border-bottom:1px solid var(--b0) } .ch .t { font-weight:600; font-size:14px }
+.ch .r { margin-left:auto; display:flex; gap:8px; align-items:center }
+.chip { display:flex; gap:6px; align-items:center; border:1px solid var(--b1); border-radius:4px; padding:.25rem .6rem; color:var(--sub); font-size:12px } .chip b { color:var(--fg); font-weight:500 }
+.tabs { display:flex; align-items:flex-end; gap:2px; padding:0 10px; border-bottom:1px solid var(--b1) }
+.tab { display:flex; gap:7px; align-items:center; padding:7px 12px; border:1px solid transparent; border-bottom:0; border-radius:5px 5px 0 0; color:var(--sub); position:relative; top:1px }
+.tab.on { background:var(--bg); border-color:var(--b1); color:var(--fg) } .tab .dot { width:6px; height:6px; border-radius:50%; background:var(--accent) } .tab .xx { color:var(--muted); visibility:hidden } .tab:hover .xx { visibility:visible }
+.urlbar { display:flex; gap:10px; align-items:center; padding:8px 14px }
+.url { flex:1; display:flex; align-items:center; gap:10px; height:36px; border:1px solid var(--b1); border-radius:5px; padding:0 10px; background:var(--mantle); font:13px var(--mono); min-width:0 }
+.url .u { flex:1; overflow:hidden; white-space:nowrap; text-overflow:ellipsis } .var { color:var(--ok) } .var.miss { color:var(--del) }
+.url .ia { display:flex; gap:10px; color:var(--sub) } .send { height:36px; padding:0 22px; border-radius:5px; background:var(--accent); color:var(--onaccent); font-weight:600 }
+.split { display:grid; grid-template-columns:1fr 6px 1fr; min-height:0 } .gut { cursor:col-resize; position:relative } .gut::after { content:''; position:absolute; inset:0 2px; background:var(--b1) }
+.pane { display:flex; flex-direction:column; min-width:0; min-height:0; padding:0 14px }
+.ptabs { display:flex; gap:18px; align-items:center; height:40px; color:var(--sub) } .ptabs span { padding:9px 0; border-bottom:2px solid transparent; cursor:pointer } .ptabs .on { color:var(--fg); border-color:var(--accent) }
+.ptabs sup { font-size:10px; margin-left:2px } .ptabs .r { margin-left:auto; display:flex; gap:12px; align-items:center; font-size:12px }
+.sec { color:var(--sub); margin:12px 0 6px; font-size:12px }
+table.kv { width:100%; border-collapse:separate; border-spacing:0; border:1px solid var(--b1); border-radius:5px; overflow:hidden }
+.kv th, .kv td { border-bottom:1px solid var(--b1); border-right:1px solid var(--b1); padding:6px 9px; text-align:left; font-weight:400 } .kv th { color:var(--sub); font-weight:500; background:var(--mantle) }
+.kv tr:last-child td { border-bottom:0 } .kv td:last-child, .kv th:last-child { border-right:0; width:34px; text-align:center } .kv td:first-child, .kv th:first-child { width:34px; text-align:center }
+.kv .ph { color:var(--muted) } .cb { width:14px; height:14px; border-radius:3px; background:var(--accent); display:inline-grid; place-items:center } .cb svg { stroke:var(--onaccent); width:10px; height:10px }
+.link { color:var(--accent); align-self:flex-end; margin-top:8px }
+.status { color:var(--ok); font-weight:600 } .code { flex:1; overflow:auto; font:12.5px/1.7 var(--mono); margin:0 -14px; padding:4px 14px }
+.code .ln { display:inline-block; width:2.4em; color:var(--muted); text-align:right; margin-right:14px; user-select:none }
+.jk{color:var(--j-k)} .js{color:var(--j-s)} .jn{color:var(--j-n)} .jb{color:var(--j-b)}
+.sbar { display:flex; align-items:center; gap:16px; padding:0 12px; border-top:1px solid var(--b1); background:var(--mantle); color:var(--sub); font-size:12px }
+.sbar span { display:flex; gap:5px; align-items:center } .sbar .r { margin-left:auto; display:flex; gap:16px }
+.local { color:var(--ok) }
+
+/* ---------- component sheet ---------- */
+.comp { display:flex; flex-wrap:wrap; gap:10px; align-items:center }
+.inp { border:1px solid var(--b1); border-radius:4px; padding:.35rem .6rem; background:var(--mantle); color:var(--fg); font:inherit }
+.inp:focus { outline:2px solid var(--accent-soft); border-color:var(--accent) }
+.badge { padding:1px 7px; border-radius:10px; font-size:11px; background:var(--accent-soft); color:var(--accent) }
+.toast { display:flex; gap:8px; align-items:center; border:1px solid var(--b1); border-left:3px solid var(--ok); border-radius:4px; padding:.5rem .8rem; background:var(--bg); box-shadow:0 4px 14px rgba(0,0,0,.12) }
+.modal { background:var(--bg); border:1px solid var(--b1); border-radius:8px; box-shadow:0 16px 40px rgba(0,0,0,.25); width:100%; max-width:380px }
+.modal .mh { padding:12px 16px; border-bottom:1px solid var(--b1); font-weight:600; display:flex } .modal .mb { padding:14px 16px; display:grid; gap:10px } .modal .mf { padding:10px 16px; border-top:1px solid var(--b1); display:flex; justify-content:flex-end; gap:8px }
+.modal label { display:grid; gap:4px; color:var(--sub); font-size:12px }
+.menu { background:var(--bg); border:1px solid var(--b1); border-radius:6px; box-shadow:0 8px 24px rgba(0,0,0,.18); padding:4px; width:200px } .menu div { padding:.35rem .6rem; border-radius:4px; display:flex; gap:8px } .menu div:hover { background:var(--surface) } .menu .k { margin-left:auto; color:var(--muted); font-size:11px } .menu hr { border:0; border-top:1px solid var(--b1); margin:4px 0 } .menu .dg { color:var(--del) }
+.palette { background:var(--bg); border:1px solid var(--b1); border-radius:8px; box-shadow:0 16px 40px rgba(0,0,0,.25); width:100%; max-width:440px; overflow:hidden }
+.palette input { width:100%; border:0; border-bottom:1px solid var(--b1); padding:12px 14px; background:transparent; color:var(--fg); font:inherit; outline:0 } .palette .it { display:flex; gap:10px; padding:7px 14px } .palette .it.on { background:var(--accent-soft) } .palette .it small { margin-left:auto; color:var(--muted) }
+.empty { text-align:center; color:var(--sub); padding:24px; border:1px dashed var(--b2); border-radius:6px }
+.notes { columns:2 340px; color:var(--sub) } .notes li { margin-bottom:.4rem; break-inside:avoid } .notes b { color:var(--fg) }
+</style>
+</head>
+<body>
+<div class="ctl">
+  <b>Mock controls</b>
+  <label>Mode <button class="btn" id="mode">Dark</button></label>
+  <label>Light background <select class="inp" id="lightbg"><option value="white">White (Bruno)</option><option value="bone">Bone (current)</option></select></label>
+  <label>Accent <span class="dots" id="ctl-dots"></span></label>
+</div>
+<div class="page">
+
+<h2>1 · Accent picker: show one, click to open a dropdown</h2>
+<p>Instead of five dots always on screen, show only the current accent. Click it and a small dropdown opens. Click each one to try it.</p>
+<div class="grid3">
+  <div class="card"><h3>A · Swatch only</h3><p>A single dot in the top bar opens a list of colours with their names.</p>
+    <div class="dd" data-dd><button class="btn" aria-label="Accent colour"><span class="sw cur"></span><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
+      <div class="pop" data-list></div></div></div>
+  <div class="card"><h3>B · Swatch + name</h3><p>The same idea, but the button says which colour is on. Clearer, takes a bit more room.</p>
+    <div class="dd" data-dd><button class="btn"><span class="sw cur"></span><span class="curname">Amber</span><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
+      <div class="pop" data-list></div></div></div>
+  <div class="card"><h3>C · One "Appearance" menu (recommended)</h3><p>A single palette icon holds both Light/Dark and the accent, which frees the top bar completely. This is how Bruno does it (its theme settings are behind one icon in the status bar).</p>
+    <div class="dd" data-dd><button class="btn" aria-label="Appearance"><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><circle cx="5.5" cy="6.5" r="1"/><circle cx="8.5" cy="5" r="1"/><circle cx="10.8" cy="7.5" r="1"/><path d="M8 14c-1 0-1.5-.8-1.5-1.6 0-1 1-1.2 1-2.2"/></svg>Appearance</button>
+      <div class="pop" style="min-width:230px"><div class="lbl">Mode</div><div class="seg2" data-modeseg><button data-m="light">Light</button><button data-m="dark">Dark</button><button data-m="system">System</button></div>
+        <div class="lbl">Accent</div><div class="swrow" data-swrow></div></div></div></div>
+</div>
+
+<h2>2 · Light mode background: bone (current) vs white</h2>
+<p>The same screen in both. White is what Bruno uses: cleaner and more neutral, with flat grey layers. Bone is softer on the eyes and has more character, but it makes the method colours and charts look a bit muddier.</p>
+<div class="cmp">
+  <div><div class="mini" style="--mbg:#f4f1ea;--mm:#efebe2;--mb:#ddd6c8;--msel:#e3dccd;--minput:#fbfaf6"><div class="tb"><b>API-Man</b><span>Bone · #f4f1ea</span></div>
+    <div class="bd"><div class="sd"><div>▾ Users API</div><div class="on"><span class="m GET" style="color:#3d7a2a">GET</span> List users</div><div><span class="m POST" style="color:#a35f00">POST</span> Create user</div></div>
+    <div class="mn"><div class="url"><span class="m" style="color:#3d7a2a">GET</span>{{base}}/users<span class="send">Send</span></div><pre>{ "id": 42, "name": "Ada" }</pre></div></div></div></div>
+  <div><div class="mini" style="--mbg:#fff;--mm:#f8f8f8;--mb:#e5e5e5;--msel:#eaeaea;--minput:#f8f8f8"><div class="tb"><b>API-Man</b><span>White · #ffffff</span></div>
+    <div class="bd"><div class="sd"><div>▾ Users API</div><div class="on"><span class="m" style="color:#16a34a">GET</span> List users</div><div><span class="m" style="color:#6366f1">POST</span> Create user</div></div>
+    <div class="mn"><div class="url"><span class="m" style="color:#16a34a">GET</span>{{base}}/users<span class="send">Send</span></div><pre>{ "id": 42, "name": "Ada" }</pre></div></div></div></div>
+</div>
+<p style="margin-top:.6rem">My recommendation: <b>white</b>, so light mode matches the neutral greys of the new dark theme. The <i>Light background</i> switch at the top applies either one to the full mock below.</p>
+
+<h2>3 · The whole app, laid out like Bruno, but local-only</h2>
+<p>Same structure as Bruno: title bar, collection tree, request tabs, URL bar, request and response side by side, status bar. Where Bruno shows Git (branch picker, sync), API-Man shows that everything is stored locally, and adds Load test.</p>
+<div class="app">
+  <div class="title">
+    <div class="ws"><svg class="ico" viewBox="0 0 16 16"><path d="M2 7l6-5 6 5v7H2z"/></svg>Local workspace<svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></div>
+    <div class="mid"><span class="brand"><svg class="ico" viewBox="0 0 22 22" style="width:14px;height:14px;stroke-width:2.4"><path d="M8 6 L4.5 11 L8 16 M14 6 L17.5 11 L14 16"/></svg></span>API-Man</div>
+    <div class="r"><svg class="ico" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M6 3v10"/></svg><svg class="ico" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M2 10h12"/></svg><svg class="ico" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="10" rx="1"/><path d="M8 3v10"/></svg></div>
+  </div>
+  <div class="body">
+    <aside class="side">
+      <div class="sh"><svg class="ico" viewBox="0 0 16 16"><path d="M2 4h5l1 2h6v7H2z"/></svg>Collections<span class="sp"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg><svg class="ico" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg><svg class="ico" viewBox="0 0 16 16"><path d="M8 3v.01M8 8v.01M8 13v.01"/></svg></span></div>
+      <div class="tree">
+        <div class="ti d1"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>Users API</div>
+        <div class="ti d2"><svg class="ico" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>Auth</div>
+        <div class="ti d2"><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg>Users</div>
+        <div class="ti d3 on"><span class="m GET">GET</span><span class="nm">List users</span></div>
+        <div class="ti d3"><span class="m GET">GET</span><span class="nm">Get user by id</span></div>
+        <div class="ti d3"><span class="m POST">POST</span><span class="nm">Create user</span></div>
+        <div class="ti d3"><span class="m PUT">PUT</span><span class="nm">Replace user</span></div>
+        <div class="ti d3"><span class="m PATCH">PATCH</span><span class="nm">Update email</span></div>
+        <div class="ti d3"><span class="m DELETE">DEL</span><span class="nm">Delete user</span></div>
+        <div class="ti d1"><svg class="ico" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>Payments (staging)</div>
+        <div class="ti d1"><svg class="ico" viewBox="0 0 16 16"><path d="M6 4l4 4-4 4"/></svg>Imported from Postman</div>
+      </div>
+      <div class="sfoot">
+        <div><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><path d="M8 5v3l2 1"/></svg>History<span class="sp">500</span></div>
+        <div><svg class="ico" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg>Environments<span class="sp"><svg class="ico" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span></div>
+        <div><svg class="ico" viewBox="0 0 16 16"><path d="M2 13l3-6 3 3 3-7 3 10"/></svg>Load tests<span class="sp"><svg class="ico" viewBox="0 0 16 16"><path d="M8 3v10M3 8h10"/></svg></span></div>
+      </div>
+    </aside>
+    <section class="main">
+      <div class="ch"><svg class="ico" viewBox="0 0 16 16"><path d="M2 4h5l1 2h6v7H2z"/></svg><span class="t">Users API</span><svg class="ico" viewBox="0 0 16 16" style="color:var(--sub)"><path d="M4 6l4 4 4-4"/></svg>
+        <div class="r">
+          <span class="chip" title="Saved on this machine only"><svg class="ico local" viewBox="0 0 16 16"><rect x="2" y="3" width="12" height="8" rx="1"/><path d="M5 14h6"/></svg><b>Local</b> · saved on this machine</span>
+          <button class="chip"><svg class="ico" viewBox="0 0 16 16"><path d="M2 13l3-6 3 3 3-7 3 10"/></svg><b>Load test</b></button>
+          <button class="chip"><svg class="ico" viewBox="0 0 16 16"><path d="M3 4h10M3 8h10M3 12h6"/></svg><b>Dev</b><svg class="ico" viewBox="0 0 16 16"><path d="M4 6l4 4 4-4"/></svg></button>
+        </div></div>
+      <div class="tabs">
+        <div class="tab on"><span class="m GET">GET</span>List users<span class="xx">×</span></div>
+        <div class="tab"><span class="m POST">POST</span>Create user<span class="dot" title="Unsaved"></span></div>
+        <div class="tab"><span class="m DELETE">DEL</span>Delete user<span class="xx">×</span></div>
+        <button class="tab" style="color:var(--muted)">+</button>
+      </div>
+      <div class="urlbar">
+        <div class="url"><span class="m GET">GET</span><span class="u"><span class="var">{{base}}</span>/users?page=2&amp;limit=20&amp;q=<span class="var miss" title="Not in Dev">{{search}}</span></span>
+          <span class="ia"><svg class="ico" viewBox="0 0 16 16" aria-label="Code"><path d="M6 4L2 8l4 4M10 4l4 4-4 4"/></svg><svg class="ico" viewBox="0 0 16 16" aria-label="Save"><path d="M3 2h8l2 2v10H3z"/><path d="M5 2v4h5V2M5 14v-4h6v4"/></svg></span></div>
+        <button class="send">Send</button>
+      </div>
+      <div class="split">
+        <div class="pane">
+          <div class="ptabs"><span class="on">Params<sup>3</sup></span><span>Body</span><span>Headers<sup>1</sup></span><span>Auth</span><span>Vars</span><span>Settings</span></div>
+          <div class="sec">Query</div>
+          <table class="kv"><tr><th></th><th>Name</th><th>Value</th><th>Description</th><th></th></tr>
+            <tr><td><span class="cb"><svg class="ico" viewBox="0 0 10 10"><path d="M2 5l2 2 4-4"/></svg></span></td><td>page</td><td>2</td><td class="ph">—</td><td><svg class="ico" viewBox="0 0 16 16" style="color:var(--sub)"><path d="M3 4h10M6 4V2h4v2M5 4l1 10h4l1-10"/></svg></td></tr>
+            <tr><td><span class="cb"><svg class="ico" viewBox="0 0 10 10"><path d="M2 5l2 2 4-4"/></svg></span></td><td>limit</td><td>20</td><td>max 100</td><td><svg class="ico" viewBox="0 0 16 16" style="color:var(--sub)"><path d="M3 4h10M6 4V2h4v2M5 4l1 10h4l1-10"/></svg></td></tr>
+            <tr><td><span class="cb"><svg class="ico" viewBox="0 0 10 10"><path d="M2 5l2 2 4-4"/></svg></span></td><td>q</td><td><span class="var miss">{{search}}</span></td><td class="ph">—</td><td><svg class="ico" viewBox="0 0 16 16" style="color:var(--sub)"><path d="M3 4h10M6 4V2h4v2M5 4l1 10h4l1-10"/></svg></td></tr>
+            <tr><td></td><td class="ph">Name</td><td class="ph">Value</td><td class="ph">Description</td><td></td></tr>
+          </table>
+          <button class="link">Bulk edit</button>
+        </div>
+        <div class="gut" title="Drag to resize"></div>
+        <div class="pane">
+          <div class="ptabs"><span class="on">Response</span><span>Headers<sup>14</sup></span><span>Timeline</span><span>Code</span>
+            <span class="r"><button class="chip">{ } JSON ▾</button><span class="status">200 OK</span><span>142 ms</span><span>3.4 KB</span></span></div>
+          <pre class="code"><span class="ln">1</span>▾ {
+<span class="ln">2</span>    <span class="jk">"page"</span>: <span class="jn">2</span>,
+<span class="ln">3</span>    <span class="jk">"total"</span>: <span class="jn">1284</span>,
+<span class="ln">4</span>    <span class="jk">"more"</span>: <span class="jb">true</span>,
+<span class="ln">5</span>  ▾ <span class="jk">"items"</span>: [
+<span class="ln">6</span>    ▾ {
+<span class="ln">7</span>        <span class="jk">"id"</span>: <span class="jn">9007199254740993</span>,
+<span class="ln">8</span>        <span class="jk">"name"</span>: <span class="js">"Ada Lovelace"</span>,
+<span class="ln">9</span>        <span class="jk">"email"</span>: <span class="js">"ada@example.com"</span>,
+<span class="ln">10</span>        <span class="jk">"active"</span>: <span class="jb">true</span>
+<span class="ln">11</span>      },
+<span class="ln">12</span>    ▸ { … 4 keys },
+<span class="ln">13</span>    ▸ { … 4 keys }
+<span class="ln">14</span>    ]
+<span class="ln">15</span>}</pre>
+        </div>
+      </div>
+    </section>
+  </div>
+  <div class="sbar">
+    <span><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="2"/><path d="M8 1v2M8 13v2M1 8h2M13 8h2M3 3l1.5 1.5M11.5 11.5L13 13M3 13l1.5-1.5M11.5 4.5L13 3"/></svg></span>
+    <span title="Appearance"><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><circle cx="5.5" cy="6.5" r="1"/><circle cx="8.5" cy="5" r="1"/><circle cx="10.8" cy="7.5" r="1"/></svg></span>
+    <span class="local">● localhost:7071 · 13 MB</span>
+    <span class="r"><span><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>Search <kbd>Ctrl K</kbd></span><span>Import</span><span>~/.local/share/apiperf</span><span>v0.1</span></span>
+  </div>
+</div>
+
+<h2>4 · Components</h2>
+<p>Every building block in the new style. They all follow the Mode and Accent controls at the top.</p>
+<div class="grid3">
+  <div class="card"><h3>Buttons and inputs</h3><p>Primary, secondary, text link, input, dropdown.</p>
+    <div class="comp"><button class="btn pri">Send</button><button class="btn">Save</button><button class="btn">Cancel</button><button class="link" style="margin:0">Bulk edit</button></div>
+    <div class="comp" style="margin-top:10px"><input class="inp" placeholder="Search requests"><select class="inp"><option>Dev</option><option>Staging</option><option>No environment</option></select></div></div>
+  <div class="card"><h3>Method tags and status</h3><p>Same method colours as Bruno: GET green, POST indigo, PUT/PATCH amber, DELETE red.</p>
+    <div class="comp"><span class="m GET">GET</span><span class="m POST">POST</span><span class="m PUT">PUT</span><span class="m PATCH">PATCH</span><span class="m DELETE">DELETE</span></div>
+    <div class="comp" style="margin-top:10px"><span class="status">200 OK</span><span style="color:var(--put);font-weight:600">301</span><span style="color:var(--put);font-weight:600">404</span><span style="color:var(--del);font-weight:600">500</span><span class="badge">3</span></div></div>
+  <div class="card"><h3>Toast</h3><p>A brief confirmation in the corner after saving, importing or copying.</p>
+    <div class="toast"><svg class="ico" viewBox="0 0 16 16" style="color:var(--ok)"><path d="M3 8l3 3 7-7"/></svg>Imported 24 requests into “Payments”</div></div>
+  <div class="card"><h3>Save dialog</h3><p>Pick a name and collection or folder. Replaces the current plain popup.</p>
+    <div class="modal"><div class="mh">Save request<span style="margin-left:auto;color:var(--muted)">×</span></div>
+      <div class="mb"><label>Name<input class="inp" value="List users"></label><label>Collection / folder<select class="inp"><option>Users API / Users</option></select></label></div>
+      <div class="mf"><button class="btn">Cancel</button><button class="btn pri">Save</button></div></div></div>
+  <div class="card"><h3>Right-click menu (collection tree)</h3><p>New, rename, duplicate, delete, plus "Load test this" (something only API-Man has).</p>
+    <div class="menu"><div>New request<span class="k">Ctrl N</span></div><div>New folder</div><div>Rename<span class="k">F2</span></div><div>Duplicate</div><div>Load test this…</div><div>Export JSON</div><hr><div class="dg">Delete</div></div></div>
+  <div class="card"><h3>Search everything (Ctrl K)</h3><p>Jump to any request, environment or action.</p>
+    <div class="palette"><input placeholder="Search requests, environments, actions…" value="user"><div class="it on"><span class="m GET">GET</span>List users<small>Users API / Users</small></div><div class="it"><span class="m POST">POST</span>Create user<small>Users API / Users</small></div><div class="it">⇄ Switch environment<small>action</small></div></div></div>
+  <div class="card"><h3>Empty states</h3><p>What a new user sees before anything is saved.</p>
+    <div class="empty">No collections yet.<br><button class="btn pri" style="margin-top:10px">New collection</button> <button class="btn" style="margin-top:10px">Import from Postman</button></div></div>
+</div>
+
+<h2>5 · What changes versus the app today</h2>
+<ul class="notes">
+  <li><b>Layout:</b> the request and response move side by side, with a draggable divider (they're stacked today). Narrow windows switch back to stacked.</li>
+  <li><b>Request tabs:</b> open several requests at once, each with a dot if it has unsaved changes. Today there is one request on screen at a time.</li>
+  <li><b>Collection tree:</b> folders inside collections, the method in a fixed-width column, right-click menus, and drag to reorder (needs a small database change for folders).</li>
+  <li><b>Top bar:</b> Bruno's Git branch and sync controls become a <i>Local · saved on this machine</i> label, and the environment picker sits in the same place as Bruno's.</li>
+  <li><b>Sidebar footer:</b> History, Environments and Load tests (Bruno puts API specs and mock servers here).</li>
+  <li><b>Status bar:</b> settings, Appearance (mode and accent, option C above), server status, Ctrl K search, where data is stored.</li>
+  <li><b>Params table:</b> adds a Description column and Bulk edit (paste <code>key: value</code> lines). Each row gets a trash icon, and the empty row at the bottom keeps today's behaviour.</li>
+  <li><b>Response:</b> line numbers, folding, format picker, and status/time/size on the right of the tabs. Timeline replaces today's phase bars.</li>
+  <li><b>Theme:</b> neutral greys taken from Bruno's open-source theme (#1e1e1e base, #222224 sidebar; white in light mode), keeping our fonts and accent choices. Only the layout and colour approach are borrowed; Bruno's name and logo are not used.</li>
+  <li><b>Left out (not wanted or not needed for a local app):</b> Git, cloud sync, accounts, scripting, GraphQL/gRPC. Any of these can come later.</li>
+</ul>
+</div>
+<script>
+const ACC = [['amber','Amber','#d9a342'],['violet','Violet','#a78bfa'],['teal','Teal','#2dd4bf'],['rose','Rose','#f472b6'],['blue','Blue','#60a5fa']];
+const H = document.documentElement;
+function setAccent(a) {
+  H.dataset.accent = a; const [, name, c] = ACC.find(x => x[0] === a);
+  document.querySelectorAll('.cur').forEach(e => e.style.setProperty('--c', c));
+  document.querySelectorAll('.curname').forEach(e => e.textContent = name);
+  document.querySelectorAll('[data-a]').forEach(e => e.classList.toggle('on', e.dataset.a === a));
+}
+const sw = ([a, n, c], cls = 'sw') => `<span class="${cls}" data-a="${a}" style="--c:${c}" title="${n}"></span>`;
+document.getElementById('ctl-dots').innerHTML = ACC.map(x => sw(x)).join('');
+document.querySelectorAll('[data-list]').forEach(p => p.innerHTML = ACC.map(x => `<button class="row" data-a="${x[0]}">${sw(x)}${x[1]}<span class="chk">✓</span></button>`).join(''));
+document.querySelectorAll('[data-swrow]').forEach(p => p.innerHTML = ACC.map(x => sw(x)).join(''));
+document.addEventListener('click', e => {
+  const a = e.target.closest('[data-a]'); if (a) setAccent(a.dataset.a);
+  const dd = e.target.closest('[data-dd]');
+  document.querySelectorAll('[data-dd].open').forEach(d => { if (d !== dd) d.classList.remove('open') });
+  if (dd && e.target.closest('[data-dd] > .btn')) dd.classList.toggle('open');
+  if (a && e.target.closest('[data-list]')) dd.classList.remove('open');
+  const m = e.target.closest('[data-m]'); if (m) setMode(m.dataset.m === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light') : m.dataset.m, m.dataset.m);
+});
+function setMode(mode, seg = mode) {
+  H.classList.toggle('dark', mode === 'dark'); document.getElementById('mode').textContent = mode === 'dark' ? 'Dark' : 'Light';
+  document.querySelectorAll('[data-m]').forEach(b => b.classList.toggle('on', b.dataset.m === seg));
+}
+document.getElementById('mode').onclick = () => setMode(H.classList.contains('dark') ? 'light' : 'dark');
+document.getElementById('lightbg').onchange = e => { H.dataset.lightbg = e.target.value; if (H.classList.contains('dark')) setMode('light'); };
+setAccent('amber'); setMode('dark');
+</script>
+</body>
+</html>

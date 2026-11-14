@@ -1,0 +1,10 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "API-Man",
+  "outputfilename": "apiperf",
+  "info": {
+    "productName": "API-Man",
+    "productVersion": "0.1.0",
+    "comments": "Send API requests and load-test them"
+  }
+}

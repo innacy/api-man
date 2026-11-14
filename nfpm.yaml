@@ -1,0 +1,13 @@
+name: apiperf
+arch: amd64
+version: ${VERSION}
+maintainer: apiperf
+description: API-Man - send API requests and load-test them
+depends: [libgtk-3-0, libwebkit2gtk-4.1-0]
+contents:
+  - src: build/bin/apiperf
+    dst: /usr/bin/apiperf
+  - src: build/appicon.svg
+    dst: /usr/share/icons/hicolor/scalable/apps/apiperf.svg
+  - src: build/linux/apiperf.desktop
+    dst: /usr/share/applications/apiperf.desktop

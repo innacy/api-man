@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/tls"
+	"errors"
 	"io"
 	"net"
 	"net/http"
@@ -144,6 +145,7 @@ type Phases struct {
 	WaitMs    float64 `json:"waitMs"` // server processing: request written → first byte
 	RecvMs    float64 `json:"recvMs"`
 	Reused    bool    `json:"reused"`
+	Remote    string  `json:"remote,omitempty"` // server ip:port of the last connection used
 }
 
 // Probe sends one real request on a new connection ("cold"), then repeats
@@ -163,7 +165,7 @@ func Probe(t curlparse.Target, timeout time.Duration) ProbeResult {
 	}
 
 	start := time.Now()
-	res, body, cold, err := timedDo(client, t)
+	res, body, _, cold, err := timedDo(client, t, 64*1024)
 	if err != nil {
 		return ProbeResult{Error: err.Error(), LatencyMs: time.Since(start).Milliseconds()}
 	}
@@ -175,45 +177,104 @@ func Probe(t curlparse.Target, timeout time.Duration) ProbeResult {
 		Status: res.StatusCode, LatencyMs: time.Since(start).Milliseconds(),
 		Bytes: len(body), Snippet: string(snip), Proto: res.Proto, Cold: &cold,
 	}
-	if _, _, warm, err := timedDo(client, t); err == nil {
+	if _, _, _, warm, err := timedDo(client, t, 64*1024); err == nil {
 		p.Warm = &warm
 	}
 	return p
 }
 
+// maxSendBody caps the response body Send keeps in memory (var for tests).
+var maxSendBody int64 = 50 << 20
+
+// Response is the full result of one request sent from the Send tab.
+type Response struct {
+	Status       int         `json:"status"`
+	StatusText   string      `json:"statusText"`
+	Proto        string      `json:"proto,omitempty"`
+	Header       http.Header `json:"header,omitempty"`
+	Body         []byte      `json:"body"`         // base64 in JSON
+	Size         int64       `json:"size"`         // body bytes received (after decompression)
+	Truncated    bool        `json:"truncated"`    // Body holds only the first maxSendBody bytes
+	Decompressed bool        `json:"decompressed"` // Go transparently gunzipped the body
+	TimeMs       float64     `json:"timeMs"`
+	Phases       Phases      `json:"phases"`
+	TLS          string      `json:"tls,omitempty"`       // e.g. "TLS 1.3"
+	Redirects    []string    `json:"redirects,omitempty"` // URLs followed, in order
+	Error        string      `json:"error,omitempty"`
+}
+
+// Send performs exactly one request (unlike Probe, which repeats it) and
+// returns everything the response viewer needs.
+func Send(t curlparse.Target, timeout time.Duration) Response {
+	tr := http.DefaultTransport.(*http.Transport).Clone()
+	defer tr.CloseIdleConnections()
+	if t.Insecure {
+		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	var hops []string
+	client := &http.Client{Transport: tr, Timeout: timeout,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			if !t.FollowRedirects {
+				return http.ErrUseLastResponse
+			}
+			if len(via) >= 10 {
+				return errors.New("stopped after 10 redirects")
+			}
+			hops = append(hops, req.URL.String())
+			return nil
+		}}
+
+	start := time.Now()
+	res, body, size, ph, err := timedDo(client, t, maxSendBody)
+	r := Response{TimeMs: float64(time.Since(start).Microseconds()) / 1000, Phases: ph, Redirects: hops}
+	if err != nil {
+		r.Error = err.Error()
+		return r
+	}
+	r.Status, r.StatusText, r.Proto, r.Header = res.StatusCode, http.StatusText(res.StatusCode), res.Proto, res.Header
+	r.Body, r.Size, r.Truncated, r.Decompressed = body, size, size > int64(len(body)), res.Uncompressed
+	if res.TLS != nil {
+		r.TLS = tls.VersionName(res.TLS.Version)
+	}
+	return r
+}
+
 // timedDo performs one request with an httptrace hooked in. It returns the
-// first 64KB of the body; the rest is drained so the connection can be reused.
+// first limit bytes of the body and the total size seen; up to 10MB more is
+// drained so the connection can be reused.
 // ponytail: with -L, phases cover every hop combined (curl's -w does the same).
-func timedDo(client *http.Client, t curlparse.Target) (*http.Response, []byte, Phases, error) {
+func timedDo(client *http.Client, t curlparse.Target, limit int64) (*http.Response, []byte, int64, Phases, error) {
 	var p Phases
 	var dnsStart, connStart, tlsStart, gotConn, wrote, firstByte time.Time
 	ms := func(d time.Duration) float64 { return float64(d.Microseconds()) / 1000 }
 	trace := &httptrace.ClientTrace{
-		DNSStart:             func(httptrace.DNSStartInfo) { dnsStart = time.Now() },
-		DNSDone:              func(httptrace.DNSDoneInfo) { p.DNSMs += ms(time.Since(dnsStart)) },
-		ConnectStart:         func(string, string) { connStart = time.Now() },
-		ConnectDone:          func(string, string, error) { p.ConnectMs += ms(time.Since(connStart)) },
-		TLSHandshakeStart:    func() { tlsStart = time.Now() },
-		TLSHandshakeDone:     func(tls.ConnectionState, error) { p.TLSMs += ms(time.Since(tlsStart)) },
-		GotConn:              func(i httptrace.GotConnInfo) { gotConn, p.Reused = time.Now(), i.Reused },
+		DNSStart:          func(httptrace.DNSStartInfo) { dnsStart = time.Now() },
+		DNSDone:           func(httptrace.DNSDoneInfo) { p.DNSMs += ms(time.Since(dnsStart)) },
+		ConnectStart:      func(string, string) { connStart = time.Now() },
+		ConnectDone:       func(string, string, error) { p.ConnectMs += ms(time.Since(connStart)) },
+		TLSHandshakeStart: func() { tlsStart = time.Now() },
+		TLSHandshakeDone:  func(tls.ConnectionState, error) { p.TLSMs += ms(time.Since(tlsStart)) },
+		GotConn: func(i httptrace.GotConnInfo) {
+			gotConn, p.Reused, p.Remote = time.Now(), i.Reused, i.Conn.RemoteAddr().String()
+		},
 		WroteRequest:         func(httptrace.WroteRequestInfo) { wrote = time.Now(); p.SendMs += ms(wrote.Sub(gotConn)) },
 		GotFirstResponseByte: func() { firstByte = time.Now(); p.WaitMs += ms(firstByte.Sub(wrote)) },
 	}
 	req, err := http.NewRequest(t.Method, t.URL, bytes.NewReader(t.Body))
 	if err != nil {
-		return nil, nil, p, err
+		return nil, nil, 0, p, err
 	}
 	req.Header = t.Header.Clone()
 	req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
 	res, err := client.Do(req)
 	if err != nil {
-		return nil, nil, p, err
+		return nil, nil, 0, p, err
 	}
 	defer res.Body.Close()
-	body, _ := io.ReadAll(io.LimitReader(res.Body, 64*1024))
-	io.Copy(io.Discard, io.LimitReader(res.Body, 10<<20))
+	body, _ := io.ReadAll(io.LimitReader(res.Body, limit))
+	rest, _ := io.Copy(io.Discard, io.LimitReader(res.Body, 10<<20))
 	p.RecvMs = ms(time.Since(firstByte))
-	return res, body, p, nil
+	return res, body, int64(len(body)) + rest, p, nil
 }
 
 // IsPrivateHost reports whether every resolved IP of the URL's host is

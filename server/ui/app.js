@@ -7,20 +7,40 @@ const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v
 
 const state = { runId: null, external: false, plan: [], summaries: [], probe: null, target: null, report: null };
 
-// Theme toggle: persisted in localStorage, defaults to light.
-function applyTheme(theme) {
-  document.documentElement.classList.toggle('dark', theme === 'dark');
+// Appearance (status bar): mode light/dark/system and accent, persisted in
+// localStorage. "system" follows the OS setting live.
+const darkMQ = matchMedia('(prefers-color-scheme: dark)');
+let themeMode = 'dark';
+function applyTheme(mode) {
+  themeMode = mode;
+  document.documentElement.classList.toggle('dark', mode === 'dark' || (mode === 'system' && darkMQ.matches));
   document.querySelectorAll('#theme-toggle button').forEach(b =>
-    b.classList.toggle('active', b.dataset.theme === theme));
-  try { localStorage.setItem('apiperf-theme', theme); } catch {}
+    b.classList.toggle('active', b.dataset.theme === mode));
+  try { localStorage.setItem('apiperf-theme', mode); } catch {}
+  repaint();
+}
+darkMQ.addEventListener('change', () => { if (themeMode === 'system') applyTheme('system'); });
+$('#appear-btn').onclick = () => $('#appear').classList.toggle('open');
+document.addEventListener('click', (e) => { if (!e.target.closest('#appear')) $('#appear').classList.remove('open'); });
+function applyAccent(a) {
+  document.documentElement.dataset.accent = a;
+  document.querySelectorAll('#accents button').forEach(b => b.classList.toggle('active', b.dataset.accent === a));
+  try { localStorage.setItem('apiperf-accent', a); } catch {}
+  repaint();
+}
+function repaint() {
   drawStairs();
   if (state.report && !$('#view-report').classList.contains('hidden')) drawCharts(); // SVG colours are baked in
 }
 document.querySelectorAll('#theme-toggle button').forEach(b =>
   b.onclick = () => applyTheme(b.dataset.theme));
+document.querySelectorAll('#accents button').forEach(b =>
+  b.onclick = () => applyAccent(b.dataset.accent));
 
 function show(view) {
-  for (const v of ['setup', 'live', 'report', 'history']) $('#view-' + v).classList.toggle('hidden', v !== view);
+  for (const v of ['send', 'setup', 'live', 'report', 'history']) $('#view-' + v).classList.toggle('hidden', v !== view);
+  $('#pages').classList.toggle('hidden', view === 'send');
+  document.dispatchEvent(new CustomEvent('viewchange', { detail: view }));
 }
 // The URL hash is the source of truth for which view is open, so a reload
 // (or Back) lands on the same report/history/live run: #run/42, #history.
@@ -28,14 +48,15 @@ function route() {
   const m = location.hash.match(/^#run\/(\d+)$/);
   if (m) loadReport(+m[1]);
   else if (location.hash === '#history') { loadHistory(); show('history'); }
-  else show('setup');
+  else if (location.hash === '#new') show('setup');
+  else show('send');
 }
 function go(hash) {
   if (location.hash === hash) route(); else location.hash = hash;
 }
 window.onhashchange = route;
 document.querySelectorAll('nav a').forEach(a => a.onclick = () =>
-  go(a.dataset.view === 'history' ? '#history' : '#new'));
+  go(a.dataset.view === 'setup' ? '#new' : '#' + a.dataset.view));
 
 // redact hides credentials when showing a curl (copy still gives the full one).
 const redact = (curl) => curl
@@ -196,7 +217,7 @@ $('#r-go').onclick = () => {
 
 // Staircase: width = estimated time share (min sliver so short stages stay visible), height = concurrency.
 function drawStairs() {
-  const plan = state.plan, L = 40, R = 890, T = 14, B = 96, maxC = Math.max(...plan.map(s => s.concurrency));
+  const plan = state.plan, L = 40, R = 890, T = 30, B = 112, maxC = Math.max(...plan.map(s => s.concurrency));
   const raw = plan.map(s => probeMs() == null ? 1 : estSecs(s)), rawSum = raw.reduce((a, b) => a + b, 0);
   const share = raw.map(v => Math.max(v / rawSum, .06)), shareSum = share.reduce((a, b) => a + b, 0);
   let x = L, g = `<text x="${L - 6}" y="${T + 4}" text-anchor="end">${maxC}</text><text x="${L - 6}" y="${B}" text-anchor="end">0</text>`;
@@ -206,7 +227,7 @@ function drawStairs() {
     if (ww > 50) g += `<text x="${x + ww / 2}" y="${B + 16}" text-anchor="middle">${fmtN(s.requests)} @ ${s.concurrency}</text>`;
     x += ww;
   });
-  $('#stairs').innerHTML = g + `<text x="${R}" y="${T}" text-anchor="end">requests at once, over ${probeMs() == null ? 'stages' : 'time'} →</text>`;
+  $('#stairs').innerHTML = g + `<text x="${R}" y="12" text-anchor="end">requests at once, over ${probeMs() == null ? 'stages' : 'time'} →</text>`;
 }
 
 // Abort rules: slider and number box stay in sync.
@@ -777,9 +798,12 @@ async function loadHistory() {
   }).join('') : '<tr><td colspan="8" class="muted">No runs yet. Start one from “New run”.</td></tr>';
 }
 
-let savedTheme = 'light';
-try { savedTheme = localStorage.getItem('apiperf-theme') || 'light'; } catch {}
+let savedTheme = 'dark'; // the Bench theme's main mode; a saved choice wins
+try { savedTheme = localStorage.getItem('apiperf-theme') || 'dark'; } catch {}
 renderPlan();
 syncRules();
 applyTheme(savedTheme);
+let savedAccent = 'amber';
+try { savedAccent = localStorage.getItem('apiperf-accent') || 'amber'; } catch {}
+applyAccent(savedAccent);
 route();

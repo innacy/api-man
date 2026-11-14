@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>API-Man Theme Options</title>
+<!-- Static mock: three theme directions for API-Man, each rendering the same Send screen. Fake data.
+     Fonts load from Google Fonts here only for the preview; the real app would ship them inside the binary (all OFL). -->
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing:border-box }
+  body { margin:0; background:#e9e9e7; color:#222; font:14px/1.5 system-ui, sans-serif }
+  .intro { padding:28px 32px 8px; max-width:1100px }
+  .intro h1 { margin:0 0 6px; font-size:20px } .intro p { margin:4px 0; color:#555 }
+  .opt { padding:20px 32px 36px }
+  .opt > header { display:flex; align-items:baseline; gap:14px; flex-wrap:wrap; margin-bottom:12px }
+  .opt > header h2 { margin:0; font-size:17px } .opt > header p { margin:0; color:#555; max-width:900px }
+  .swatches { display:flex; gap:6px; margin-left:auto } .swatches i { width:22px; height:22px; border-radius:4px; border:1px solid rgba(0,0,0,.15) }
+
+  /* ---------- shared screen skeleton; each theme sets the tokens ---------- */
+  .scr { background:var(--bg); color:var(--fg); font-family:var(--sans); font-size:13.5px; border:1px solid var(--line); border-radius:var(--rOuter); overflow:hidden }
+  .top { display:flex; align-items:center; gap:22px; padding:10px 18px; background:var(--topbg); color:var(--topfg); border-bottom:1px solid var(--line) }
+  .brand { display:flex; align-items:center; gap:9px; font-family:var(--brandfont); font-weight:600; font-size:15px; letter-spacing:var(--brandls) }
+  .top nav { display:flex; gap:18px; font-size:13px } .top nav a { color:inherit; opacity:.65; text-decoration:none } .top nav a.on { opacity:1; box-shadow:inset 0 -2px var(--accent); padding-bottom:3px }
+  .top .sp { margin-left:auto; font-size:12px; opacity:.7 }
+  .body { display:grid; grid-template-columns:300px 1fr; min-height:470px }
+  .side { background:var(--sidebg); color:var(--sidefg); border-right:1px solid var(--line); padding:12px 10px }
+  .side .tabs, .main .tabs { display:flex; gap:16px; font-size:12.5px; border-bottom:1px solid var(--line2); margin-bottom:10px }
+  .tabs span { padding:6px 0; opacity:.6 } .tabs span.on { opacity:1; box-shadow:inset 0 -2px var(--accent) }
+  .search { width:100%; padding:6px 8px; border:1px solid var(--line2); border-radius:var(--r); background:var(--inbg); color:inherit; font:inherit; font-size:12.5px; margin-bottom:10px }
+  .col { font-size:11px; text-transform:uppercase; letter-spacing:.06em; opacity:.6; padding:8px 4px 4px }
+  .it { display:flex; gap:8px; align-items:center; padding:5px 6px; border-radius:var(--r); font-size:13px }
+  .it.on { background:var(--sel); }
+  .m { font-family:var(--mono); font-size:10.5px; font-weight:700; width:3.6em; flex:none }
+  .GET { color:var(--get) } .POST { color:var(--post) } .PUT { color:var(--put) } .DELETE { color:var(--del) }
+  .main { padding:14px 18px; min-width:0 }
+  .title { display:flex; align-items:center; gap:8px; margin-bottom:10px } .title b { font-weight:600 } .title .dot { color:var(--accent); font-size:12px }
+  .btn { border:1px solid var(--line2); background:var(--btnbg); color:inherit; border-radius:var(--r); padding:5px 12px; font:inherit; font-size:12.5px; font-weight:500 }
+  .btn.pri { background:var(--accent); border-color:var(--accent); color:var(--onaccent); font-weight:600 }
+  .line { display:flex; gap:8px } .line .meth { width:96px; font-family:var(--mono); font-weight:700; color:var(--post) }
+  .line .url { flex:1; font-family:var(--mono) }
+  .field { border:1px solid var(--line2); border-radius:var(--r); background:var(--inbg); padding:7px 10px; font-size:13px }
+  .resmeta { display:flex; gap:18px; align-items:center; margin:14px 0 8px; font-size:12.5px }
+  .pill { font-family:var(--mono); font-weight:700; padding:2px 8px; border-radius:var(--r); background:var(--okbg); color:var(--ok) }
+  pre { margin:0; background:var(--codebg); color:var(--codefg); border:1px solid var(--line2); border-radius:var(--r); padding:12px 14px; font:12.5px/1.6 var(--mono); overflow:auto }
+  .k { color:var(--jk) } .s { color:var(--js) } .n { color:var(--jn) } .b { color:var(--jb) }
+
+  /* ---------- A: Bench (instrument panel, dark) ---------- */
+  .A { --bg:#141414; --fg:#d9d5cc; --topbg:#0e0e0e; --topfg:#e8e4da; --sidebg:#111; --sidefg:#cfcabe; --line:#262626; --line2:#2f2f2f;
+       --inbg:#1b1b1b; --btnbg:#1b1b1b; --sel:#2a2418; --accent:#f2a33a; --onaccent:#141414; --r:2px; --rOuter:3px;
+       --sans:'IBM Plex Sans', system-ui, sans-serif; --mono:'JetBrains Mono', ui-monospace, monospace; --brandfont:'JetBrains Mono', monospace; --brandls:.02em;
+       --get:#8fbf6a; --post:#f2a33a; --put:#7aa7d9; --del:#e0705f; --okbg:#1f2a17; --ok:#9fd17a;
+       --codebg:#0f0f0f; --codefg:#cfcabe; --jk:#e0b46a; --js:#9fd17a; --jn:#7aa7d9; --jb:#e0705f }
+
+  /* ---------- B: Ledger (warm paper, light) ---------- */
+  .B { --bg:#f3efe6; --fg:#1d1b16; --topbg:#f3efe6; --topfg:#1d1b16; --sidebg:#ebe5d8; --sidefg:#2a261e; --line:#d6cdbb; --line2:#d6cdbb;
+       --inbg:#fbf9f4; --btnbg:#fbf9f4; --sel:#e0d6c3; --accent:#c2410c; --onaccent:#fff; --r:3px; --rOuter:4px;
+       --sans:'IBM Plex Sans', system-ui, sans-serif; --mono:'IBM Plex Mono', ui-monospace, monospace; --brandfont:'IBM Plex Mono', monospace; --brandls:-.01em;
+       --get:#2f6b3a; --post:#b4530b; --put:#2f5c8a; --del:#a3221b; --okbg:#e3ead7; --ok:#2f6b3a;
+       --codebg:#fbf9f4; --codefg:#1d1b16; --jk:#7a3410; --js:#2f6b3a; --jn:#2f5c8a; --jb:#a3221b }
+
+  /* ---------- C: Workbench (two-tone IDE, light with dark sidebar) ---------- */
+  .C { --bg:#f5f7f9; --fg:#1f2933; --topbg:#18212b; --topfg:#e6edf3; --sidebg:#1f2a35; --sidefg:#cdd6df; --line:#d9dfe5; --line2:#d3dae1;
+       --inbg:#fff; --btnbg:#fff; --sel:#2c3b4a; --accent:#0f766e; --onaccent:#fff; --r:5px; --rOuter:6px;
+       --sans:system-ui, -apple-system, 'Segoe UI', Ubuntu, sans-serif; --mono:ui-monospace, 'DejaVu Sans Mono', Menlo, monospace; --brandfont:system-ui, sans-serif; --brandls:0;
+       --get:#16a34a; --post:#d97706; --put:#2563eb; --del:#dc2626; --okbg:#dcf3ec; --ok:#0f766e;
+       --codebg:#fff; --codefg:#1f2933; --jk:#0f766e; --js:#b45309; --jn:#2563eb; --jb:#be123c }
+  .C .side .search { background:#18222c; border-color:#33424f } .C .side .tabs { border-color:#33424f }
+</style>
+</head>
+<body>
+<div class="intro">
+  <h1>API-Man: three theme directions</h1>
+  <p>Why the current UI reads as "AI-made": indigo <code>#6366f1</code> is Tailwind's default accent, paired with soft tinted pills, 12px rounded cards with pastel status chips, and an <em>Inter</em> font that isn't actually loaded. That's the stock look of generated dashboards.</p>
+  <p>Each option below fixes that with one committed accent, a real typeface, and its own logo mark (also the browser-tab icon). Every option gets a matching light/dark pair; each is shown here in its main mode.</p>
+</div>
+<div id="opts"></div>
+<script>
+// One screen template, rendered once per theme so the options compare like-for-like.
+const logos = {
+  A: '<svg width="22" height="22" viewBox="0 0 22 22"><rect x="1" y="1" width="20" height="20" rx="2" fill="none" stroke="#f2a33a" stroke-width="2"/><path d="M6 15 L9 7 L12 15 M7.2 12h3.6 M14 15V7l2 4 2-4v8" stroke="#f2a33a" stroke-width="1.6" fill="none"/></svg>',
+  B: '<svg width="22" height="22" viewBox="0 0 22 22"><circle cx="11" cy="11" r="10" fill="#c2410c"/><path d="M6 8h10M6 11h10M6 14h6" stroke="#f3efe6" stroke-width="1.8" stroke-linecap="round"/></svg>',
+  C: '<svg width="22" height="22" viewBox="0 0 22 22"><rect width="22" height="22" rx="5" fill="#0f766e"/><path d="M8 6 L4.5 11 L8 16 M14 6 L17.5 11 L14 16" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+};
+const meta = {
+  A: ['A · Bench', 'Instrument-panel dark. Graphite surfaces, one amber accent, monospace brand and data, 2px corners, dense rows. Feels like a lab bench tool; light pair is "bone white + amber".', ['#141414', '#262626', '#d9d5cc', '#f2a33a', '#8fbf6a']],
+  B: ['B · Ledger', 'Warm paper light. Off-white page, ink-black text, a single vermilion accent, IBM Plex type, hairline rules and no shadows. Calm and readable for long sessions; dark pair is "espresso + vermilion".', ['#f3efe6', '#d6cdbb', '#1d1b16', '#c2410c', '#2f6b3a']],
+  C: ['C · Workbench', 'Two-tone IDE. Dark navigation rail with a light editing area, deep teal accent, native system fonts (nothing to load), 5px corners. Closest to a desktop dev tool; dark pair darkens the editing area.', ['#18212b', '#1f2a35', '#f5f7f9', '#0f766e', '#d97706']],
+};
+const screen = (t) => `
+  <div class="scr ${t}">
+    <div class="top"><span class="brand">${logos[t]} API-Man</span>
+      <nav><a class="on">Send</a><a>Load test</a><a>Runs</a></nav><span class="sp">Local ▾</span></div>
+    <div class="body">
+      <div class="side">
+        <div class="tabs"><span class="on">Saved</span><span>History</span></div>
+        <input class="search" placeholder="Search requests">
+        <div class="col">▾ Shop API (4)</div>
+        <div class="it on"><span class="m GET">GET</span>Users / List users</div>
+        <div class="it"><span class="m POST">POST</span>Users / Create user</div>
+        <div class="it"><span class="m PUT">PUT</span>Orders / Update order status</div>
+        <div class="it"><span class="m DELETE">DEL</span>Orders / Cancel order</div>
+        <div class="col">▸ Payments (7)</div>
+      </div>
+      <div class="main">
+        <div class="title"><b>Users / List users</b><span class="dot">● unsaved</span><span style="margin-left:auto;display:flex;gap:6px"><span class="btn">New</span><span class="btn">Save as…</span><span class="btn">Save</span></span></div>
+        <div class="line"><span class="field meth">GET ▾</span><span class="field url">{{host}}/v1/users?page=2&amp;limit=20</span><span class="btn pri">Send</span></div>
+        <div class="tabs" style="margin-top:12px"><span>Params 2</span><span>Headers 3</span><span>Auth</span><span>Body</span><span>Settings</span><span>Code</span></div>
+        <div class="resmeta"><span class="pill">200 OK</span><span>Time <b>84 ms</b></span><span>Size <b>2.1 KB</b></span><span style="opacity:.6">HTTP/2 · TLS 1.3</span></div>
+        <div class="tabs"><span class="on">Body</span><span>Headers 9</span><span>Timing</span></div>
+<pre>{
+  <span class="k">"page"</span>: <span class="n">2</span>,
+  <span class="k">"users"</span>: [
+    { <span class="k">"id"</span>: <span class="n">12345678901234567890</span>, <span class="k">"name"</span>: <span class="s">"Asha Rao"</span>, <span class="k">"active"</span>: <span class="b">true</span> },
+    { <span class="k">"id"</span>: <span class="n">12345678901234567891</span>, <span class="k">"name"</span>: <span class="s">"Lee Chen"</span>, <span class="k">"active"</span>: <span class="b">false</span> }
+  ]
+}</pre>
+      </div>
+    </div>
+  </div>`;
+document.getElementById('opts').innerHTML = Object.keys(meta).map(t => `
+  <section class="opt"><header><h2>${meta[t][0]}</h2><p>${meta[t][1]}</p>
+    <span class="swatches">${meta[t][2].map(c => `<i style="background:${c}" title="${c}"></i>`).join('')}</span></header>${screen(t)}</section>`).join('');
+</script>
+</body>
+</html>

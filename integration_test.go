@@ -32,10 +32,15 @@ func TestFullRamp(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer st.Close()
+	lib, err := store.OpenLibrary(filepath.Join(t.TempDir(), "lib.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer lib.Close()
 	hub := server.NewHub()
 	o := orch.New(st, hub.Emit)
 	o.SetCooldown(10 * time.Millisecond)
-	app := httptest.NewServer(server.New(st, o, hub))
+	app := httptest.NewServer(server.New(st, lib, o, hub))
 	defer app.Close()
 
 	payload := fmt.Sprintf(`{"curl":"curl %s","stages":[{"requests":100,"concurrency":2},{"requests":500,"concurrency":5}]}`, target.URL)

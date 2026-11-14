@@ -24,10 +24,15 @@ func newTestServer(t *testing.T) (*httptest.Server, *store.Store) {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { st.Close() })
+	lib, err := store.OpenLibrary(filepath.Join(t.TempDir(), "lib.db"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { lib.Close() })
 	hub := NewHub()
 	o := orch.New(st, hub.Emit)
 	o.SetCooldown(10 * time.Millisecond)
-	ts := httptest.NewServer(New(st, o, hub))
+	ts := httptest.NewServer(New(st, lib, o, hub))
 	t.Cleanup(ts.Close)
 	return ts, st
 }

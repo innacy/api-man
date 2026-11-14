@@ -9,8 +9,11 @@ import (
 	"io"
 	"io/fs"
 	"log"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -113,6 +116,7 @@ func validatePlan(plan []metrics.Stage) error {
 
 type server struct {
 	st      *store.Store
+	lib     *store.Library
 	o       *orch.Orchestrator
 	hub     *Hub
 	pmu     sync.Mutex
@@ -120,8 +124,8 @@ type server struct {
 }
 
 // New builds the HTTP handler: embedded UI, REST API, and SSE hub.
-func New(st *store.Store, o *orch.Orchestrator, hub *Hub) http.Handler {
-	s := &server{st: st, o: o, hub: hub, pending: make(map[int64]pendingRun)}
+func New(st *store.Store, lib *store.Library, o *orch.Orchestrator, hub *Hub) http.Handler {
+	s := &server{st: st, lib: lib, o: o, hub: hub, pending: make(map[int64]pendingRun)}
 
 	mux := http.NewServeMux()
 	ui, _ := fs.Sub(uiFS, "ui")
@@ -145,8 +149,124 @@ func New(st *store.Store, o *orch.Orchestrator, hub *Hub) http.Handler {
 	mux.HandleFunc("GET /api/runs/{id}/series", s.handleSeries)
 	mux.HandleFunc("GET /api/runs/{id}/hist", s.handleHist)
 	mux.HandleFunc("GET /api/events", s.handleEvents)
+	mux.HandleFunc("POST /api/send", s.handleSend)
+	mux.HandleFunc("POST /api/curl", handleParseCurl)
+	s.libraryRoutes(mux)
 
-	return mux
+	return localOnly(mux)
+}
+
+// localOnly rejects requests whose Host isn't loopback or whose Origin isn't
+// this server. Binding to localhost isn't enough: any web page open in the
+// browser can POST here (CSRF) or rebind its hostname to 127.0.0.1 (DNS
+// rebinding), and /api/send would let it make requests from this machine.
+func localOnly(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		host := r.Host
+		if h, _, err := net.SplitHostPort(host); err == nil {
+			host = h
+		}
+		ip := net.ParseIP(strings.Trim(host, "[]"))
+		if host != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			writeError(w, http.StatusForbidden, "host not allowed")
+			return
+		}
+		if o := r.Header.Get("Origin"); o != "" {
+			if u, err := url.Parse(o); err != nil || u.Host != r.Host {
+				writeError(w, http.StatusForbidden, "cross-origin request not allowed")
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+const (
+	maxSendRequestBytes = 50 << 20
+	defaultSendTimeout  = 30 * time.Second
+)
+
+type sendRequest struct {
+	Method          string      `json:"method"`
+	URL             string      `json:"url"`
+	Headers         [][2]string `json:"headers"` // ordered pairs; repeats allowed
+	Body            string      `json:"body"`
+	Insecure        bool        `json:"insecure"`
+	FollowRedirects bool        `json:"followRedirects"`
+	TimeoutMs       int         `json:"timeoutMs"` // 0 = default (30s)
+}
+
+// handleParseCurl turns a pasted curl command into the Send tab's form fields.
+func handleParseCurl(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Curl string `json:"curl"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSendRequestBytes)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	t, err := curlparse.Parse(req.Curl)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err.Error())
+		return
+	}
+	out := sendRequest{Method: t.Method, URL: t.URL, Body: string(t.Body), Insecure: t.Insecure, FollowRedirects: t.FollowRedirects, Headers: [][2]string{}}
+	for k, vs := range t.Header {
+		for _, v := range vs {
+			out.Headers = append(out.Headers, [2]string{k, v})
+		}
+	}
+	writeJSON(w, http.StatusOK, out)
+}
+
+// handleSend fires one request, records it in history and returns the full
+// response. Transport failures come back as 200 with Response.Error set; 400
+// means the request itself was invalid.
+func (s *server) handleSend(w http.ResponseWriter, r *http.Request) {
+	var req sendRequest
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxSendRequestBytes)).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
+		return
+	}
+	method := strings.ToUpper(strings.TrimSpace(req.Method))
+	if method == "" || strings.ContainsAny(method, " \t\r\n") {
+		writeError(w, http.StatusBadRequest, "invalid method")
+		return
+	}
+	u, err := url.Parse(strings.TrimSpace(req.URL))
+	if err != nil || (u.Scheme != "http" && u.Scheme != "https") || u.Host == "" {
+		writeError(w, http.StatusBadRequest, "url must be an absolute http:// or https:// URL")
+		return
+	}
+	if req.TimeoutMs < 0 || req.TimeoutMs > maxTimeoutMs {
+		writeError(w, http.StatusBadRequest, fmt.Sprintf("timeoutMs must be between 0 and %d", maxTimeoutMs))
+		return
+	}
+	timeout := defaultSendTimeout
+	if req.TimeoutMs > 0 {
+		timeout = time.Duration(req.TimeoutMs) * time.Millisecond
+	}
+	h := http.Header{}
+	for _, kv := range req.Headers {
+		if k := strings.TrimSpace(kv[0]); k != "" {
+			h.Add(k, kv[1])
+		}
+	}
+	res := engine.Send(curlparse.Target{
+		Method: method, URL: u.String(), Header: h, Body: []byte(req.Body),
+		Insecure: req.Insecure, FollowRedirects: req.FollowRedirects,
+	}, timeout)
+
+	req.Method, req.URL = method, u.String()
+	if len(req.Body) > maxHistoryBody {
+		req.Body = "" // ponytail: big uploads aren't kept in history; save the request to keep them
+	}
+	data, _ := json.Marshal(req)
+	if err := s.lib.AddHistory(store.HistoryEntry{Method: method, URL: req.URL, Status: res.Status,
+		TimeMs: res.TimeMs, Size: res.Size, Error: res.Error, Data: data}); err != nil {
+		log.Printf("server: AddHistory: %v", err) // the response still goes back
+	}
+	writeJSON(w, http.StatusOK, res)
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
