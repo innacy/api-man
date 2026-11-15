@@ -88,10 +88,20 @@ Your data is not removed by uninstalling. Delete the data folder (see [Data](#da
 | Shortcut | Action |
 |---|---|
 | <kbd>Ctrl</kbd>+<kbd>Enter</kbd> | Send request |
-| <kbd>Ctrl</kbd>+<kbd>S</kbd> | Save request |
-| <kbd>Ctrl</kbd>+<kbd>K</kbd> | Search everything |
+| <kbd>Ctrl</kbd>+<kbd>S</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd> | Save / save as new |
+| <kbd>Ctrl</kbd>+<kbd>N</kbd> or <kbd>Ctrl</kbd>+<kbd>T</kbd> | New request tab |
+| <kbd>Ctrl</kbd>+<kbd>W</kbd> | Close tab |
+| <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>T</kbd> | Reopen closed tab |
+| <kbd>Ctrl</kbd>+<kbd>Tab</kbd> / <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Tab</kbd> | Next / previous tab |
+| <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>8</kbd>, <kbd>Ctrl</kbd>+<kbd>9</kbd> | Go to tab N, last tab |
+| <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>P</kbd> | Search everything |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Focus the URL bar |
-| <kbd>?</kbd> | Show all shortcuts |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> | Show / hide the sidebar |
+| <kbd>Ctrl</kbd>+<kbd>J</kbd> | Show / hide the response |
+| <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> | Format the JSON body |
+| <kbd>F1</kbd> | Show all shortcuts |
+
+On macOS use <kbd>Cmd</kbd> in place of <kbd>Ctrl</kbd>. In browser mode, Chrome keeps <kbd>Ctrl</kbd>+<kbd>N</kbd>/<kbd>T</kbd>/<kbd>W</kbd> for itself, so use <kbd>Alt</kbd>+<kbd>N</kbd>/<kbd>W</kbd>/<kbd>Shift</kbd>+<kbd>T</kbd> there instead.
 
 ### Browser mode
 To run API-Man without a window, for example on a server, start it with `apiperf -headless` and open <http://localhost:7071>. It only accepts connections from the local machine.

@@ -20,7 +20,7 @@ const newTab = (extra = {}) => ({
 });
 let tabs = [newTab()], active = 0, S = tabs[0];
 // Preferences shared by every tab.
-const P = { envId: null, collapsed: {}, codeLang: 'curl', wrap: false, split: .5, side: 'tree', sideHidden: false, resDown: false };
+const P = { envId: null, collapsed: {}, codeLang: 'curl', wrap: false, split: .5, side: 'tree', sideHidden: false, resDown: false, sideW: 260, resHidden: false };
 const resp = {}; // tab id → { res, bytes, text, sent } (kept in memory only)
 let res = null, bytes = null, text = '', sent = null, blobURL = null;
 let envs = [], lib = { collections: [], folders: [], requests: [] }, hist = [];
@@ -405,6 +405,7 @@ $('#sx-url').addEventListener('paste', async (e) => {
 async function sendNow() {
   const btn = $('#sx-send');
   if (btn.disabled) return;
+  if (P.resHidden) toggleRes(); // a result you can't see is no result
   $('#sx-err').textContent = '';
   const tab = S;
   const missing = new Set(), req = buildRequest(missing);
@@ -439,34 +440,46 @@ const onSend = () => !$('#view-send').classList.contains('hidden');
 // character the layout puts on Alt+key.
 const SHORTCUTS = [
   ['Ctrl Enter', 'Send the request'], ['Ctrl S', 'Save'], ['Ctrl Shift S', 'Save as new request'],
-  ['Ctrl K', 'Search requests, environments and actions'], ['Ctrl L', 'Go to the URL box'],
-  ['Alt N', 'New request tab'], ['Alt W', 'Close the tab'], ['Alt 1 … 9', 'Go to tab 1 … 9'],
-  ['Ctrl /', 'Comment out lines in a JSON body'], ['Ctrl Shift F', 'Beautify the JSON body'], ['Tab', 'Indent in the body editor'],
-  ['Alt Z', 'Wrap or unwrap the response'], ['Alt B', 'Show or hide the sidebar'], ['Alt L', 'Response on the right or below'],
-  ['F2', 'Rename the selected sidebar item'], ['?', 'Show these shortcuts'], ['Esc', 'Close menus and dialogs'],
+  ['Ctrl K', 'Search requests, environments and actions (also Ctrl P)'], ['Ctrl L', 'Go to the URL box'],
+  ['Ctrl N', 'New request tab (also Ctrl T)'], ['Ctrl W', 'Close the tab (also Ctrl F4)'], ['Ctrl Shift T', 'Reopen the last closed tab'],
+  ['Ctrl Tab', 'Next tab (also Ctrl PgDn)'], ['Ctrl Shift Tab', 'Previous tab (also Ctrl PgUp)'], ['Ctrl 1 … 8', 'Go to tab 1 … 8'], ['Ctrl 9', 'Go to the last tab'],
+  ['Ctrl /', 'Comment out lines in a JSON body'], ['Shift Alt F', 'Format the JSON body (also Ctrl Shift F)'], ['Tab', 'Indent in the body editor'],
+  ['Ctrl B', 'Show or hide the sidebar'], ['Ctrl J', 'Show or hide the response'], ['Alt L', 'Response on the right or below'], ['Alt Z', 'Wrap or unwrap the response'],
+  ['F2', 'Rename the selected sidebar item'], ['F1', 'Show these shortcuts (also ?)'], ['Esc', 'Close menus and dialogs'],
 ];
 function showShortcuts() {
   $('#sx-keys').innerHTML = SHORTCUTS.map(([k, d]) => `<tr><td>${k.split(' ').map(x => x === '…' ? '…' : `<kbd>${esc(x)}</kbd>`).join(' ')}</td><td>${esc(d)}</td></tr>`).join('');
   $('#sx-keysdlg').showModal();
 }
 function setWrap(on) { P.wrap = on; if (res && S.resTab === 'body') renderRes(); saveState(); }
+// Desktop-standard shortcuts (VS Code / Postman conventions). The old Alt
+// variants stay as aliases: in a plain browser tab (-headless) Chrome reserves
+// Ctrl+N/T/W and never hands them to the page.
 document.addEventListener('keydown', (e) => {
   const mod = e.ctrlKey || e.metaKey, typing = e.target.closest?.('input, textarea, select, [contenteditable]');
-  if (mod && e.key === 'k') { e.preventDefault(); return openPalette(); }
+  const alt = e.altKey && !mod, key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (mod && !e.altKey && (key === 'k' || key === 'p')) { e.preventDefault(); return openPalette(); }
   if (e.key === 'Escape') { hideMenu(); closePalette(); }
   if (document.querySelector('dialog[open]') || !$('#pal').classList.contains('hidden')) return;
-  if (e.altKey && !mod && e.code === 'KeyB') { e.preventDefault(); P.sideHidden = !P.sideHidden; applySide(); return saveState(); }
-  if (!typing && !mod && !e.altKey && e.key === '?') { e.preventDefault(); return showShortcuts(); }
+  if ((mod && !e.altKey && !e.shiftKey && key === 'b') || (alt && e.code === 'KeyB')) { e.preventDefault(); P.sideHidden = !P.sideHidden; applySide(); return saveState(); }
+  if (e.key === 'F1' || (!typing && !mod && !e.altKey && e.key === '?')) { e.preventDefault(); return showShortcuts(); }
   if (!onSend()) return;
+  const go = (i) => { e.preventDefault(); if (tabs.length) switchTab((i + tabs.length) % tabs.length); };
   if (mod && e.key === 'Enter') { e.preventDefault(); sendNow(); }
-  else if (mod && (e.key === 's' || e.key === 'S')) { e.preventDefault(); save(e.shiftKey); }
-  else if (mod && e.shiftKey && (e.key === 'f' || e.key === 'F') && S.bodyMode === 'json' && S.reqTab === 'body') { e.preventDefault(); beautify(); }
-  else if (mod && !e.shiftKey && e.key === 'l') { e.preventDefault(); $('#sx-url').focus(); $('#sx-url').select(); }
-  else if (e.altKey && !mod && e.code === 'KeyZ') { e.preventDefault(); setWrap(!P.wrap); }
-  else if (e.altKey && !mod && e.code === 'KeyL') { e.preventDefault(); P.resDown = !P.resDown; applySide(); saveState(); }
-  else if (e.altKey && !mod && e.code === 'KeyN') { e.preventDefault(); placeTab(newTab(), true); }
-  else if (e.altKey && !mod && e.code === 'KeyW') { e.preventDefault(); closeTab(active); }
-  else if (e.altKey && !mod && /^Digit[1-9]$/.test(e.code)) { const i = +e.code.slice(5) - 1; if (tabs[i]) { e.preventDefault(); switchTab(i); } }
+  else if (mod && !e.altKey && key === 's') { e.preventDefault(); save(e.shiftKey); }
+  else if (((e.shiftKey && e.altKey && !mod && e.code === 'KeyF') || (mod && e.shiftKey && key === 'f')) && S.bodyMode === 'json' && S.reqTab === 'body') { e.preventDefault(); beautify(); }
+  else if (mod && !e.shiftKey && !e.altKey && key === 'l') { e.preventDefault(); $('#sx-url').focus(); $('#sx-url').select(); }
+  else if ((mod && !e.altKey && !e.shiftKey && (key === 'n' || key === 't')) || (alt && e.code === 'KeyN')) { e.preventDefault(); placeTab(newTab(), true); }
+  else if ((mod && !e.altKey && !e.shiftKey && (key === 'w' || e.key === 'F4')) || (alt && e.code === 'KeyW')) { e.preventDefault(); closeTab(active); }
+  else if ((mod || e.altKey) && e.shiftKey && e.code === 'KeyT') { e.preventDefault(); reopenTab(); }
+  else if (mod && e.key === 'Tab') go(active + (e.shiftKey ? -1 : 1));
+  else if (mod && e.key === 'PageDown') go(active + 1);
+  else if (mod && e.key === 'PageUp') go(active - 1);
+  else if (mod && !e.altKey && /^Digit[1-9]$/.test(e.code)) { const n = +e.code.slice(5); if (n === 9 || tabs[n - 1]) go(n === 9 ? tabs.length - 1 : n - 1); }
+  else if (alt && /^Digit[1-9]$/.test(e.code)) { const i = +e.code.slice(5) - 1; if (tabs[i]) go(i); }
+  else if ((mod && !e.altKey && !e.shiftKey && key === 'j') || (alt && e.code === 'KeyR')) { e.preventDefault(); toggleRes(); }
+  else if (alt && e.code === 'KeyZ') { e.preventDefault(); setWrap(!P.wrap); }
+  else if (alt && e.code === 'KeyL') { e.preventDefault(); P.resDown = !P.resDown; applySide(); saveState(); }
   else if (e.key === 'F2' && !typing && lastRow) { e.preventDefault(); renameItem(lastRow.kind, lastRow.id); }
 });
 
@@ -634,11 +647,26 @@ $('#sx-respane').addEventListener('change', (e) => {
 
 // Request/response divider: drag to resize; the split is kept between sessions.
 function applySplit() { const s = $('#sx-split'); s.style.setProperty('--l', P.split + 'fr'); s.style.setProperty('--r', (1 - P.split) + 'fr'); }
-$('#sx-gut').addEventListener('pointerdown', (e) => {
-  const g = e.currentTarget, box = $('#sx-split').getBoundingClientRect();
-  g.setPointerCapture(e.pointerId); g.classList.add('drag');
-  g.onpointermove = (m) => { P.split = Math.min(.8, Math.max(.2, P.resDown ? (m.clientY - box.top) / box.height : (m.clientX - box.left) / box.width)); applySplit(); };
-  g.onpointerup = () => { g.onpointermove = null; g.classList.remove('drag'); saveState(); };
+// dragHandle makes el a resize handle: left button only, no text selection
+// while dragging (WebKit otherwise selects across the page), and the drag ends
+// on lostpointercapture, which fires on release *and* on pointercancel.
+function dragHandle(el, onStart, onMove) {
+  el.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    const ctx = onStart();
+    el.setPointerCapture(e.pointerId);
+    el.classList.add('drag'); document.documentElement.classList.add('dragging');
+    el.onpointermove = (m) => onMove(m, ctx);
+    el.addEventListener('lostpointercapture', () => {
+      el.onpointermove = null;
+      el.classList.remove('drag'); document.documentElement.classList.remove('dragging');
+      saveState();
+    }, { once: true });
+  });
+}
+dragHandle($('#sx-gut'), () => $('#sx-split').getBoundingClientRect(), (m, box) => {
+  P.split = Math.min(.8, Math.max(.2, P.resDown ? (m.clientY - box.top) / box.height : (m.clientX - box.left) / box.width)); applySplit();
 });
 $('#sx-gut').ondblclick = () => { P.split = .5; applySplit(); saveState(); };
 
@@ -654,8 +682,8 @@ function locationOf(cid, fid) {
 }
 function renderChrome() {
   $('#sx-tabs').innerHTML = tabs.map((t, i) => `<div class="tab ${i === active ? 'on' : ''}" data-tab="${i}" title="${esc(t.url)}">
-      ${mth((t.method || 'GET').toUpperCase())}<span class="nm">${esc(tabTitle(t))}</span>${isDirty(t) ? '<span class="dot" title="Unsaved changes"></span>' : ''}<button class="ib xx" data-close="${i}" title="Close">${ICO.x}</button></div>`).join('') +
-    `<button class="ib tab-add" id="sx-newtab" title="New request">${ICO.plus}</button>`;
+      ${mth((t.method || 'GET').toUpperCase())}<span class="nm">${esc(tabTitle(t))}</span>${isDirty(t) ? '<span class="dot" title="Unsaved changes"></span>' : ''}<button class="ib xx" data-close="${i}" title="Close (Ctrl+W)">${ICO.x}</button></div>`).join('') +
+    `<button class="ib tab-add" id="sx-newtab" title="New request (Ctrl+N)">${ICO.plus}</button>`;
   const loc = locationOf(S.collectionId, S.folderId);
   $('#sx-crumb').innerHTML = (loc.length ? loc.map(esc).map(n => `<span>${n}</span>`).join('<span class="sep">/</span>') + '<span class="sep">/</span>' : '') +
     `<span>${esc(S.name || (S.savedId ? '' : 'Unsaved request'))}</span>`;
@@ -678,10 +706,15 @@ function placeTab(t, forceNew) {
   else { tabs.push(t); switchTab(tabs.length - 1); }
   go('#send');
 }
+// ponytail: closed tabs kept in memory for this session only, last 20.
+const closed = [];
+function remember(t) { if (!isPristine(t)) { closed.push(structuredClone(t)); if (closed.length > 20) closed.shift(); } }
+function reopenTab() { const t = closed.pop(); if (t) placeTab({ ...t, tid: newTab().tid }); }
 function closeTab(i) {
   const t = tabs[i];
   if (isDirty(t) && !confirm(`Close "${tabTitle(t)}" without saving?`)) return;
   dropResp(t.tid);
+  remember(t);
   tabs.splice(i, 1);
   if (!tabs.length) tabs.push(newTab());
   switchTab(Math.min(i < active ? active - 1 : active, tabs.length - 1));
@@ -705,8 +738,9 @@ $('#sx-tabs').addEventListener('contextmenu', (e) => {
     { label: 'Save as…', key: 'Ctrl Shift S', run: () => save(true) },
     { label: 'Duplicate tab', run: () => placeTab({ ...structuredClone(S), tid: newTab().tid, savedId: null, name: S.name ? S.name + ' copy' : '' }, true) },
     '-',
-    { label: 'Close', run: () => closeTab(active) },
-    { label: 'Close other tabs', run: () => { for (let j = tabs.length - 1; j >= 0; j--) if (j !== active) { if (isDirty(tabs[j]) && !confirm(`Close "${tabTitle(tabs[j])}" without saving?`)) continue; dropResp(tabs[j].tid); tabs.splice(j, 1); if (j < active) active--; } switchTab(active); } },
+    { label: 'Close', key: 'Ctrl W', run: () => closeTab(active) },
+    { label: 'Reopen closed tab', key: 'Ctrl Shift T', run: reopenTab },
+    { label: 'Close other tabs', run: () => { for (let j = tabs.length - 1; j >= 0; j--) if (j !== active) { if (isDirty(tabs[j]) && !confirm(`Close "${tabTitle(tabs[j])}" without saving?`)) continue; dropResp(tabs[j].tid); remember(tabs[j]); tabs.splice(j, 1); if (j < active) active--; } switchTab(active); } },
   ]);
 });
 // Tab from saved form fields (or fields rebuilt from history).
@@ -1046,7 +1080,19 @@ document.addEventListener('viewchange', (e) => {
   $('#f-load').classList.toggle('on', e.detail === 'setup');
   $('#f-runs').classList.toggle('on', e.detail === 'history' || e.detail === 'report' || e.detail === 'live');
 });
-function applySide() { $('#body').classList.toggle('noside', P.sideHidden); document.documentElement.classList.toggle('down', P.resDown); }
+function applySide() {
+  $('#body').classList.toggle('noside', P.sideHidden);
+  $('#body').style.setProperty('--sidew', P.sideW + 'px');
+  document.documentElement.classList.toggle('down', P.resDown);
+  document.documentElement.classList.toggle('nores', P.resHidden);
+}
+const toggleRes = () => { P.resHidden = !P.resHidden; applySide(); saveState(); };
+$('#toggle-res').onclick = toggleRes;
+// Sidebar width: drag its right edge; double-click resets. Kept between sessions.
+dragHandle($('#side-gut'), () => $('#body').getBoundingClientRect().left, (m, left) => {
+  P.sideW = Math.round(Math.min(600, Math.max(180, m.clientX - left))); applySide();
+});
+$('#side-gut').ondblclick = () => { P.sideW = 260; applySide(); saveState(); };
 $('#toggle-layout').onclick = () => { P.resDown = !P.resDown; applySide(); saveState(); };
 $('#toggle-side').onclick = () => { P.sideHidden = !P.sideHidden; applySide(); saveState(); };
 $('#sb-host').textContent = '● ' + location.host;

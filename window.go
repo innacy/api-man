@@ -3,8 +3,10 @@ package main
 import (
 	_ "embed"
 	"net/http"
+	"runtime"
 
 	"github.com/wailsapp/wails/v2"
+	"github.com/wailsapp/wails/v2/pkg/menu"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
@@ -18,7 +20,17 @@ var appIcon []byte
 // asset handler doesn't stream reliably, and the UI depends on SSE
 // (/api/events). The server code stays identical to -headless mode.
 func runWindow() error {
+	// macOS routes Cmd+C/V/X/A/Z and Cmd+Q through the app menu; without one
+	// they do nothing in the webview. Other OSes handle them natively and
+	// would show this as a menu bar, so it's macOS-only.
+	var appMenu *menu.Menu
+	if runtime.GOOS == "darwin" {
+		appMenu = menu.NewMenu()
+		appMenu.Append(menu.AppMenu())
+		appMenu.Append(menu.EditMenu())
+	}
 	return wails.Run(&options.App{
+		Menu:      appMenu,
 		Title:     "API-Man",
 		Width:     1400,
 		Height:    900,
