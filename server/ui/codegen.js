@@ -102,4 +102,24 @@ const CODE_LANGS = {
   },
 };
 
-if (typeof module !== 'undefined') module.exports = { CODE_LANGS };
+// authFromHeaders moves a Basic or Bearer Authorization header (curl -u turns
+// into one) into the Auth tab's shape. Other schemes stay as headers.
+function authFromHeaders(headers) {
+  let auth = { type: 'none' };
+  const rest = headers.filter(([k, v]) => {
+    if (auth.type !== 'none' || k.toLowerCase() !== 'authorization') return true;
+    const [, scheme, cred] = /^\s*(\w+)\s+(.+?)\s*$/.exec(v) || [];
+    if (/^bearer$/i.test(scheme || '')) { auth = { type: 'bearer', token: cred }; return false; }
+    if (/^basic$/i.test(scheme || '')) {
+      let dec;
+      try { dec = new TextDecoder().decode(Uint8Array.from(atob(cred), c => c.charCodeAt(0))); } catch { return true; }
+      const i = dec.indexOf(':');
+      auth = { type: 'basic', user: i < 0 ? dec : dec.slice(0, i), pass: i < 0 ? '' : dec.slice(i + 1) };
+      return false;
+    }
+    return true;
+  });
+  return { auth, headers: rest };
+}
+
+if (typeof module !== 'undefined') module.exports = { CODE_LANGS, authFromHeaders };

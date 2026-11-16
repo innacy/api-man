@@ -394,9 +394,10 @@ $('#sx-url').addEventListener('paste', async (e) => {
   if (!r.ok) { $('#sx-err').textContent = 'Could not read that curl: ' + j.error; return; }
   $('#sx-err').textContent = '';
   const ct = (j.headers.find(([k]) => k.toLowerCase() === 'content-type') || [])[1] || '';
+  const { auth, headers } = authFromHeaders(j.headers);
   Object.assign(S, {
-    method: j.method, url: j.url, params: paramsFromURL(j.url), follow: j.followRedirects, insecure: j.insecure, auth: { type: 'none' },
-    headers: j.headers.map(([k, v]) => ({ on: true, k, v, d: '' })), body: j.body,
+    method: j.method, url: j.url, params: paramsFromURL(j.url), follow: j.followRedirects, insecure: j.insecure, auth,
+    headers: headers.map(([k, v]) => ({ on: true, k, v, d: '' })), body: j.body,
     bodyMode: !j.body ? 'none' : /json/.test(ct) ? 'json' : /xml/.test(ct) ? 'xml' : 'text',
   });
   renderEditor(); saveState();

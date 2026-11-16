@@ -92,3 +92,15 @@ test('HTTPie header values starting with = or @ are escaped, not read as file/JS
   assert.ok(args.includes('Y:\\@/etc/passwd'), args.join(' '));
   assert.ok(args.includes('Z:a=@b'), args.join(' ')); // only the leading separator matters
 });
+
+test('authFromHeaders moves Basic and Bearer into Auth', () => {
+  const { authFromHeaders } = require('./ui/codegen.js');
+  const b64 = Buffer.from('APIUser:pa:ss').toString('base64');
+  assert.deepStrictEqual(authFromHeaders([['Authorization', 'Basic ' + b64], ['Accept', 'application/json']]),
+    { auth: { type: 'basic', user: 'APIUser', pass: 'pa:ss' }, headers: [['Accept', 'application/json']] });
+  assert.deepStrictEqual(authFromHeaders([['authorization', 'Bearer abc.def']]), { auth: { type: 'bearer', token: 'abc.def' }, headers: [] });
+  const digest = [['Authorization', 'Digest username="x"']];
+  assert.deepStrictEqual(authFromHeaders(digest), { auth: { type: 'none' }, headers: digest });
+  const bad = [['Authorization', 'Basic !!notbase64']];
+  assert.deepStrictEqual(authFromHeaders(bad), { auth: { type: 'none' }, headers: bad });
+});
