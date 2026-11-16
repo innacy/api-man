@@ -134,6 +134,11 @@ func New(st *store.Store, lib *store.Library, o *orch.Orchestrator, hub *Hub) ht
 	files := http.FileServer(http.FS(ui))
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-cache")
+		if r.URL.Path == "/scripts.js" {
+			// The script worker runs user (and imported) code: its CSP allows
+			// eval but no connections, sub-workers or script imports.
+			w.Header().Set("Content-Security-Policy", "default-src 'none'; script-src 'unsafe-eval'")
+		}
 		files.ServeHTTP(w, r)
 	})
 

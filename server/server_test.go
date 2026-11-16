@@ -251,3 +251,15 @@ func TestStartRunTwiceRejected(t *testing.T) {
 		t.Fatalf("series total after rejected re-start = %d, want 30", total)
 	}
 }
+
+func TestScriptWorkerCSP(t *testing.T) {
+	ts, _ := newTestServer(t)
+	res, err := http.Get(ts.URL + "/scripts.js")
+	if err != nil {
+		t.Fatal(err)
+	}
+	res.Body.Close()
+	if res.StatusCode != 200 || res.Header.Get("Content-Security-Policy") != "default-src 'none'; script-src 'unsafe-eval'" {
+		t.Fatalf("status %d, CSP %q", res.StatusCode, res.Header.Get("Content-Security-Policy"))
+	}
+}
