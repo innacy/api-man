@@ -6,6 +6,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/tsenart/vegeta/v12 v12.13.0
 	github.com/wailsapp/wails/v2 v2.10.2
+	golang.org/x/net v0.35.0
 	modernc.org/sqlite v1.56.0
 )
 
@@ -41,7 +42,6 @@ require (
 	github.com/wailsapp/go-webview2 v1.0.19 // indirect
 	github.com/wailsapp/mimetype v1.4.1 // indirect
 	golang.org/x/crypto v0.33.0 // indirect
-	golang.org/x/net v0.35.0 // indirect
 	golang.org/x/sync v0.21.0 // indirect
 	golang.org/x/sys v0.47.0 // indirect
 	golang.org/x/text v0.22.0 // indirect

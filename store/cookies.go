@@ -2,11 +2,14 @@ package store
 
 import (
 	"log"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
+
+	"golang.org/x/net/publicsuffix"
 )
 
 // Cookie is one stored cookie as the Cookies dialog shows it. Expires is
@@ -33,16 +36,14 @@ CREATE TABLE IF NOT EXISTS cookies(
 // SetCookies stores the Set-Cookie values of a response from u, making
 // Library an http.CookieJar for the Send tab. Cookies for other domains, and
 // Max-Age=0 / past-Expires deletions, follow RFC 6265.
-// ponytail: no public-suffix list, so a server could set Domain=com for
-// itself; harmless for a single-user local client, add x/net/publicsuffix if not.
 func (l *Library) SetCookies(u *url.URL, cookies []*http.Cookie) {
 	host := strings.ToLower(u.Hostname())
 	for _, c := range cookies {
 		domain, hostOnly := strings.TrimPrefix(strings.ToLower(c.Domain), "."), false
 		if domain == "" {
 			domain, hostOnly = host, true
-		} else if host != domain && !strings.HasSuffix(host, "."+domain) {
-			continue // a server may only set cookies for itself or a parent domain
+		} else if host != domain && (!strings.HasSuffix(host, "."+domain) || net.ParseIP(host) != nil || isPublicSuffix(domain)) {
+			continue // only for itself or a real parent domain: never "co.uk", never across IPs
 		}
 		path := c.Path
 		if !strings.HasPrefix(path, "/") {
@@ -130,6 +131,11 @@ func (l *Library) DeleteCookies(domain, path, name string) error {
 		_, err = l.db.Exec(`DELETE FROM cookies WHERE domain=? AND path=? AND name=?`, domain, path, name)
 	}
 	return err
+}
+
+func isPublicSuffix(d string) bool {
+	ps, _ := publicsuffix.PublicSuffix(d)
+	return ps == d
 }
 
 // defaultPath is RFC 6265's default cookie path: the request path up to its last "/".
