@@ -205,14 +205,14 @@ type Response struct {
 
 // Send performs exactly one request (unlike Probe, which repeats it) and
 // returns everything the response viewer needs.
-func Send(t curlparse.Target, timeout time.Duration) Response {
+func Send(t curlparse.Target, timeout time.Duration, jar http.CookieJar) Response {
 	tr := http.DefaultTransport.(*http.Transport).Clone()
 	defer tr.CloseIdleConnections()
 	if t.Insecure {
 		tr.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
 	}
 	var hops []string
-	client := &http.Client{Transport: tr, Timeout: timeout,
+	client := &http.Client{Transport: tr, Timeout: timeout, Jar: jar,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			if !t.FollowRedirects {
 				return http.ErrUseLastResponse

@@ -26,7 +26,7 @@ func TestSendReturnsFullResponseAndSendsOnce(t *testing.T) {
 
 	h := http.Header{}
 	h.Set("X-Token", "abc")
-	r := Send(curlparse.Target{Method: "POST", URL: ts.URL, Header: h, Body: []byte(`"hi"`)}, 2*time.Second)
+	r := Send(curlparse.Target{Method: "POST", URL: ts.URL, Header: h, Body: []byte(`"hi"`)}, 2*time.Second, nil)
 	if r.Error != "" || r.Status != 201 || r.StatusText != "Created" {
 		t.Fatalf("send = %+v", r)
 	}
@@ -53,7 +53,7 @@ func TestSendTruncatesLargeBody(t *testing.T) {
 	}))
 	defer ts.Close()
 
-	r := Send(curlparse.Target{Method: "GET", URL: ts.URL, Header: http.Header{}}, 2*time.Second)
+	r := Send(curlparse.Target{Method: "GET", URL: ts.URL, Header: http.Header{}}, 2*time.Second, nil)
 	if len(r.Body) != 10 || !r.Truncated || r.Size != 25 {
 		t.Fatalf("len=%d truncated=%v size=%d, want 10/true/25", len(r.Body), r.Truncated, r.Size)
 	}
@@ -69,18 +69,18 @@ func TestSendRedirects(t *testing.T) {
 	}))
 	defer redir.Close()
 
-	r := Send(curlparse.Target{Method: "GET", URL: redir.URL, Header: http.Header{}}, 2*time.Second)
+	r := Send(curlparse.Target{Method: "GET", URL: redir.URL, Header: http.Header{}}, 2*time.Second, nil)
 	if r.Status != 302 || len(r.Redirects) != 0 {
 		t.Fatalf("no-follow: status=%d redirects=%v", r.Status, r.Redirects)
 	}
-	r = Send(curlparse.Target{Method: "GET", URL: redir.URL, Header: http.Header{}, FollowRedirects: true}, 2*time.Second)
+	r = Send(curlparse.Target{Method: "GET", URL: redir.URL, Header: http.Header{}, FollowRedirects: true}, 2*time.Second, nil)
 	if r.Status != 200 || string(r.Body) != "final" || len(r.Redirects) != 1 || r.Redirects[0] != final.URL+"/end" {
 		t.Fatalf("follow: status=%d body=%q redirects=%v", r.Status, r.Body, r.Redirects)
 	}
 }
 
 func TestSendConnectionError(t *testing.T) {
-	r := Send(curlparse.Target{Method: "GET", URL: "http://127.0.0.1:1", Header: http.Header{}}, time.Second)
+	r := Send(curlparse.Target{Method: "GET", URL: "http://127.0.0.1:1", Header: http.Header{}}, time.Second, nil)
 	if r.Error == "" || r.Status != 0 {
 		t.Fatalf("want connection error, got %+v", r)
 	}

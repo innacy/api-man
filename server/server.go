@@ -151,6 +151,22 @@ func New(st *store.Store, lib *store.Library, o *orch.Orchestrator, hub *Hub) ht
 	mux.HandleFunc("GET /api/events", s.handleEvents)
 	mux.HandleFunc("POST /api/send", s.handleSend)
 	mux.HandleFunc("POST /api/curl", handleParseCurl)
+	mux.HandleFunc("GET /api/cookies", func(w http.ResponseWriter, r *http.Request) {
+		cs, err := s.lib.ListCookies()
+		if err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, cs)
+	})
+	mux.HandleFunc("DELETE /api/cookies", func(w http.ResponseWriter, r *http.Request) {
+		q := r.URL.Query()
+		if err := s.lib.DeleteCookies(q.Get("domain"), q.Get("path"), q.Get("name")); err != nil {
+			writeError(w, http.StatusInternalServerError, err.Error())
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	})
 	mux.HandleFunc("GET /api/update", handleUpdate)
 	mux.HandleFunc("POST /api/update/open", handleOpenUpdate)
 	s.libraryRoutes(mux)
@@ -195,7 +211,8 @@ type sendRequest struct {
 	Body            string      `json:"body"`
 	Insecure        bool        `json:"insecure"`
 	FollowRedirects bool        `json:"followRedirects"`
-	TimeoutMs       int         `json:"timeoutMs"` // 0 = default (30s)
+	TimeoutMs       int         `json:"timeoutMs"`           // 0 = default (30s)
+	NoCookies       bool        `json:"noCookies,omitempty"` // skip the cookie jar for this request
 }
 
 // handleParseCurl turns a pasted curl command into the Send tab's form fields.
@@ -254,10 +271,15 @@ func (s *server) handleSend(w http.ResponseWriter, r *http.Request) {
 			h.Add(k, kv[1])
 		}
 	}
+	// Load tests never get the jar: their traffic must not carry your session.
+	var jar http.CookieJar = s.lib
+	if req.NoCookies {
+		jar = nil
+	}
 	res := engine.Send(curlparse.Target{
 		Method: method, URL: u.String(), Header: h, Body: []byte(req.Body),
 		Insecure: req.Insecure, FollowRedirects: req.FollowRedirects,
-	}, timeout)
+	}, timeout, jar)
 
 	req.Method, req.URL = method, u.String()
 	if len(req.Body) > maxHistoryBody {

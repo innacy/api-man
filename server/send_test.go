@@ -107,3 +107,44 @@ func TestRejectsNonLocalOriginAndHost(t *testing.T) {
 		t.Fatalf("same origin: status = %d, want 200", res.StatusCode)
 	}
 }
+
+// Login sets a cookie; the next request to the same host sends it back,
+// unless that request opts out with noCookies.
+func TestSendCookieJar(t *testing.T) {
+	ts, _ := newTestServer(t)
+	target := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/login" {
+			http.SetCookie(w, &http.Cookie{Name: "sid", Value: "abc", Path: "/"})
+		}
+		w.Write([]byte(r.Header.Get("Cookie")))
+	}))
+	defer target.Close()
+	send := func(path string, extra string) string {
+		res := postJSON(t, ts.URL+"/api/send", `{"method":"GET","url":"`+target.URL+path+`"`+extra+`}`, nil)
+		defer res.Body.Close()
+		var got struct{ Body string }
+		json.NewDecoder(res.Body).Decode(&got)
+		b, _ := base64.StdEncoding.DecodeString(got.Body)
+		return string(b)
+	}
+	send("/login", "")
+	if got := send("/me", ""); got != "sid=abc" {
+		t.Fatalf("cookie not sent back: %q", got)
+	}
+	if got := send("/me", `,"noCookies":true`); got != "" {
+		t.Fatalf("noCookies still sent: %q", got)
+	}
+	res, _ := http.Get(ts.URL + "/api/cookies")
+	var list []struct{ Name, Domain string }
+	json.NewDecoder(res.Body).Decode(&list)
+	res.Body.Close()
+	if len(list) != 1 || list[0].Name != "sid" || list[0].Domain != "127.0.0.1" {
+		t.Fatalf("list = %+v", list)
+	}
+	req, _ := http.NewRequest("DELETE", ts.URL+"/api/cookies", nil)
+	res, _ = http.DefaultClient.Do(req)
+	res.Body.Close()
+	if got := send("/me", ""); got != "" {
+		t.Fatalf("cleared jar still sent: %q", got)
+	}
+}

@@ -84,7 +84,7 @@ func OpenLibrary(path string) (*Library, error) {
 		return nil, err
 	}
 	db.SetMaxOpenConns(1)
-	if _, err := db.Exec(libSchema); err != nil {
+	if _, err := db.Exec(libSchema + cookieSchema); err != nil {
 		db.Close()
 		return nil, err
 	}

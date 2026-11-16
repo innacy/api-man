@@ -10,11 +10,11 @@ const TABS_KEY = 'apiperf-send-tabs', PREFS_KEY = 'apiperf-send-prefs', OLD_DRAF
 const RESP_KEY = 'apiperf-resp-', RESP_KEEP_MAX = 1 << 20; // each tab's last response is kept across reloads up to 1 MB
 const blank = () => ({ on: true, k: '', v: '', d: '' });
 // The fields that make up a request; what Save stores and what "unsaved" compares.
-const FORM_KEYS = ['method', 'url', 'params', 'headers', 'auth', 'bodyMode', 'body', 'form', 'follow', 'insecure', 'timeout'];
+const FORM_KEYS = ['method', 'url', 'params', 'headers', 'auth', 'bodyMode', 'body', 'form', 'follow', 'insecure', 'timeout', 'noCookies'];
 const newTab = (extra = {}) => ({
   tid: Math.random().toString(36).slice(2),
   method: 'GET', url: '', params: [], headers: [], auth: { type: 'none' }, bodyMode: 'none', body: '', form: [],
-  follow: false, insecure: false, timeout: 30,
+  follow: false, insecure: false, timeout: 30, noCookies: false,
   reqTab: 'params', resTab: 'body', view: 'pretty', fmt: 'auto', bulk: {},
   savedId: null, name: '', collectionId: null, folderId: null, snapshot: '', ...extra,
 });
@@ -153,7 +153,7 @@ function buildRequest(missing = new Set()) {
   else if (S.bodyMode !== 'none') body = sub(S.body);
   if (S.bodyMode !== 'none' && !has('content-type')) headers.push(['Content-Type', contentTypes[S.bodyMode]]);
   return { method: S.method.trim().toUpperCase() || 'GET', url, headers, body,
-    followRedirects: S.follow, insecure: S.insecure, timeoutMs: clampTimeout(S.timeout) * 1000 };
+    followRedirects: S.follow, insecure: S.insecure, timeoutMs: clampTimeout(S.timeout) * 1000, ...(S.noCookies ? { noCookies: true } : {}) };
 }
 
 // Key/value tables work like Postman: one empty row always sits at the end;
@@ -233,7 +233,8 @@ function renderReqPane() {
   }
   else pane.innerHTML = `<div class="sec">Settings</div><label class="sx-row"><input type="checkbox" data-s="follow" ${S.follow ? 'checked' : ''}> Follow redirects</label>
     <label class="sx-row"><input type="checkbox" data-s="insecure" ${S.insecure ? 'checked' : ''}> Skip TLS certificate check <span class="muted">(self-signed dev servers only)</span></label>
-    <label class="sx-row">Timeout <input type="number" data-s="timeout" min="1" max="120" value="${clampTimeout(S.timeout)}"> seconds</label>`;
+    <label class="sx-row">Timeout <input type="number" data-s="timeout" min="1" max="120" value="${clampTimeout(S.timeout)}"> seconds</label>
+    <label class="sx-row"><input type="checkbox" data-s="noCookies" ${S.noCookies ? 'checked' : ''}> Don't send or save cookies <span class="muted">(skip the cookie jar for this request)</span> <button class="linkbtn" id="sx-cookies2">Manage cookies</button></label>`;
 }
 
 // ---------- persistence of open tabs ----------
@@ -813,7 +814,7 @@ function formFromSent(d) {
   const ct = (d.headers.find(([k]) => k.toLowerCase() === 'content-type') || [])[1] || '';
   return { method: d.method, url: d.url, headers: d.headers.map(([k, v]) => ({ on: true, k, v, d: '' })),
     body: d.body || '', bodyMode: !d.body ? 'none' : /json/.test(ct) ? 'json' : /xml/.test(ct) ? 'xml' : 'text',
-    follow: !!d.followRedirects, insecure: !!d.insecure, timeout: d.timeoutMs ? d.timeoutMs / 1000 : 30 };
+    follow: !!d.followRedirects, insecure: !!d.insecure, timeout: d.timeoutMs ? d.timeoutMs / 1000 : 30, noCookies: !!d.noCookies };
 }
 async function openSaved(id, forceNew) {
   const open = tabs.findIndex(t => t.savedId === id);
@@ -1165,6 +1166,30 @@ $('#sb-host').textContent = '● ' + location.host;
 $('#sb-search').onclick = () => openPalette();
 $('#sb-import').onclick = () => $('#sx-importfile').click();
 $('#sb-keys').onclick = showShortcuts;
+// Cookie jar: responses' Set-Cookie are stored per host by the server and sent back automatically.
+async function openCookies() {
+  let list;
+  try { list = await api('GET', '/api/cookies'); } catch (e) { return toast(e.message, true); }
+  const exp = (s) => s ? new Date(s * 1000).toLocaleString() : 'Session';
+  $('#sx-cookierows').innerHTML = list.length ? list.map((c, i) => `<tr><td>${esc(c.domain)}${c.path !== '/' ? `<span class="muted">${esc(c.path)}</span>` : ''}</td><td>${esc(c.name)}</td>
+    <td class="cv" title="${esc(c.value)}">${esc(c.value)}</td><td>${exp(c.expires)}${c.secure ? ' · Secure' : ''}${c.httpOnly ? ' · HttpOnly' : ''}</td>
+    <td><button class="ib" data-del="${i}" title="Delete cookie">${ICO.x}</button></td></tr>`).join('')
+    : '<tr><td colspan="5" class="muted">No cookies yet. They appear here when a response sets one.</td></tr>';
+  $('#sx-cookierows').onclick = async (e) => {
+    const b = e.target.closest('[data-del]'); if (!b) return;
+    const c = list[+b.dataset.del];
+    await api('DELETE', `/api/cookies?${new URLSearchParams({ domain: c.domain, path: c.path, name: c.name })}`).catch(err => toast(err.message, true));
+    openCookies();
+  };
+  if (!$('#sx-cookiedlg').open) $('#sx-cookiedlg').showModal();
+}
+$('#sb-cookies').onclick = openCookies;
+$('#sx-cookieclear').onclick = async () => {
+  if (!await confirmAsk({ title: 'Clear all cookies?', body: 'Logged-in sessions will need to log in again.', ok: 'Clear cookies', danger: true })) return;
+  await api('DELETE', '/api/cookies').catch(e => toast(e.message, true));
+  openCookies();
+};
+$('#sx-reqpane').addEventListener('click', (e) => { if (e.target.closest('#sx-cookies2')) { e.preventDefault(); openCookies(); } });
 // Load test: hand the current request to the New run page as a curl.
 function loadTest() {
   const req = buildRequest();
@@ -1210,6 +1235,7 @@ function renderPalette() {
     { html: 'Import from Postman', sub: 'action', text: 'import postman', run: () => $('#sx-importfile').click() },
     { html: 'Load test the current request', sub: 'action', text: 'load test run', run: loadTest },
     { html: 'Past load tests', sub: 'action', text: 'runs history load tests past', run: () => go('#history') },
+    { html: 'Manage cookies', sub: 'action', text: 'cookies jar session clear', run: openCookies },
     { html: 'Keyboard shortcuts', sub: 'action', text: 'keyboard shortcuts keys help', run: showShortcuts },
     { html: 'Request history', sub: 'action', text: 'history sent', run: () => { P.side = 'history'; renderTree(); saveState(); } },
   ];

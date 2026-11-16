@@ -133,6 +133,8 @@
   .inp, .sx input:not([type=checkbox]):not([type=number]), .sx select, dialog input:not([type=checkbox]), dialog select { background:var(--mantle); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:.35rem .55rem; font:13px var(--mono); min-width:0 }
   .danger-text { color:var(--bad) !important }
   dialog [hidden] { display:none }
+  .hdrs.cookies td { font-size:12px; vertical-align:middle; word-break:normal } .hdrs.cookies td:nth-child(2) { white-space:nowrap } .hdrs.cookies .cv { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .linkbtn { background:none; color:var(--accent); padding:0; font-weight:500; margin-left:auto }
   #ask-body:empty, #ask-crumb:empty, #ask-err:empty, #ask-alt:empty { display:none }
   #ask-body { color:var(--muted) } #ask-err { font-size:12px }
   .crumb { width:max-content; max-width:100%; font-size:12px; color:var(--muted); background:var(--mantle); border:1px solid var(--border); border-radius:4px; padding:1px 6px }
@@ -433,7 +435,7 @@
       <div class="swrow" id="accents"><button data-accent="amber" style="--sw:#d9a342" title="Amber"></button><button data-accent="violet" style="--sw:#a78bfa" title="Violet"></button><button data-accent="teal" style="--sw:#2dd4bf" title="Teal"></button><button data-accent="rose" style="--sw:#f472b6" title="Rose"></button><button data-accent="blue" style="--sw:#60a5fa" title="Blue"></button></div>
     </div></div>
   <span class="live" id="sb-host"></span>
-  <span class="r"><button class="sb" id="sb-search"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>Search <kbd>Ctrl K</kbd></button><button class="sb" id="sb-keys" title="Keyboard shortcuts (?)"><svg class="ico" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 9.5h6"/></svg>Shortcuts</button><button class="sb" id="sb-import">Import from Postman</button><input type="file" id="sx-importfile" accept=".json,application/json" hidden></span>
+  <span class="r"><button class="sb" id="sb-search"><svg class="ico" viewBox="0 0 16 16"><circle cx="7" cy="7" r="4"/><path d="M10 10l3 3"/></svg>Search <kbd>Ctrl K</kbd></button><button class="sb" id="sb-keys" title="Keyboard shortcuts (?)"><svg class="ico" viewBox="0 0 16 16"><rect x="1.5" y="4" width="13" height="8" rx="1.5"/><path d="M4 7h.01M6.5 7h.01M9 7h.01M11.5 7h.01M5 9.5h6"/></svg>Shortcuts</button><button class="sb" id="sb-cookies">Cookies</button><button class="sb" id="sb-import">Import from Postman</button><input type="file" id="sx-importfile" accept=".json,application/json" hidden></span>
 </footer>
 </div>
 
@@ -461,6 +463,12 @@
       <label id="ask-field">Name<input id="ask-in" maxlength="200"></label><span class="bad" id="ask-err"></span></div>
     <div class="df"><button id="ask-ok" value="ok" style="order:3"></button><button class="ghost" id="ask-cancel" value="" formnovalidate>Cancel</button><button class="ghost" id="ask-alt" value="alt" formnovalidate></button></div>
   </form>
+</dialog>
+<dialog id="sx-cookiedlg" class="wide">
+  <div class="dh">Cookies</div>
+  <div class="db"><p class="hint" style="margin:0">Cookies set by responses are saved here and sent back on later requests to the same site. Load tests never use them.</p>
+    <div style="max-height:50vh;overflow:auto"><table class="hdrs cookies"><thead><tr><th>Domain</th><th>Name</th><th>Value</th><th>Expires</th><th></th></tr></thead><tbody id="sx-cookierows"></tbody></table></div></div>
+  <form method="dialog" class="df"><button type="button" class="ghost danger-text" id="sx-cookieclear" style="margin-right:auto">Clear all</button><button>Close</button></form>
 </dialog>
 <dialog id="sx-keysdlg">
   <div class="dh">Keyboard shortcuts</div>
