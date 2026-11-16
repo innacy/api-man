@@ -1239,6 +1239,8 @@ $('#sx-envsave').onclick = async () => {
     $('#sx-envmsg').className = 'muted'; $('#sx-envmsg').textContent = 'Saved.';
   } catch (err) { $('#sx-envmsg').className = 'bad'; $('#sx-envmsg').textContent = err.message; }
 };
+// No <form> here (rows are added live), so Enter in a field saves explicitly.
+$('#sx-envdlg').addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.matches('input')) { e.preventDefault(); $('#sx-envsave').click(); } });
 $('#sx-envdel').onclick = async () => {
   if (!E.id || !await confirmAsk({ title: 'Delete environment?', body: `"${E.name}" and its variables will be deleted.`, ok: 'Delete', danger: true })) return;
   try {
