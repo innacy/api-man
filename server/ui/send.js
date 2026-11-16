@@ -469,7 +469,7 @@ document.addEventListener('keydown', (e) => {
   else if (mod && !e.altKey && key === 's') { e.preventDefault(); save(e.shiftKey); }
   else if (((e.shiftKey && e.altKey && !mod && e.code === 'KeyF') || (mod && e.shiftKey && key === 'f')) && S.bodyMode === 'json' && S.reqTab === 'body') { e.preventDefault(); beautify(); }
   else if (mod && !e.shiftKey && !e.altKey && key === 'l') { e.preventDefault(); $('#sx-url').focus(); $('#sx-url').select(); }
-  else if ((mod && !e.altKey && !e.shiftKey && (key === 'n' || key === 't')) || (alt && e.code === 'KeyN')) { e.preventDefault(); placeTab(newTab(), true); }
+  else if ((mod && !e.altKey && !e.shiftKey && (key === 'n' || key === 't')) || (alt && e.code === 'KeyN')) { e.preventDefault(); newRequest(); }
   else if ((mod && !e.altKey && !e.shiftKey && (key === 'w' || e.key === 'F4')) || (alt && e.code === 'KeyW')) { e.preventDefault(); closeTab(active); }
   else if ((mod || e.altKey) && e.shiftKey && e.code === 'KeyT') { e.preventDefault(); reopenTab(); }
   else if (mod && e.key === 'Tab') go(active + (e.shiftKey ? -1 : 1));
@@ -701,6 +701,8 @@ function switchTab(i) {
   renderEditor(); saveState();
 }
 // placeTab opens t: into the current tab when that one is empty, else a new tab.
+// New blank tab with the URL box focused, ready for a paste.
+function newRequest() { placeTab(newTab(), true); requestAnimationFrame(() => $('#sx-url').focus()); }
 function placeTab(t, forceNew) {
   if (!forceNew && isPristine(S)) { dropResp(S.tid); tabs[active] = t; switchTab(active); }
   else { tabs.push(t); switchTab(tabs.length - 1); }
@@ -731,7 +733,7 @@ async function closeTab(i) {
 $('#sx-tabs').addEventListener('click', (e) => {
   const c = e.target.closest('[data-close]');
   if (c) return closeTab(+c.dataset.close);
-  if (e.target.closest('#sx-newtab')) return placeTab(newTab(), true);
+  if (e.target.closest('#sx-newtab')) return newRequest();
   const t = e.target.closest('[data-tab]');
   if (t && +t.dataset.tab !== active) switchTab(+t.dataset.tab);
 });
@@ -1084,7 +1086,7 @@ $('#sx-list').addEventListener('drop', async (e) => {
 $('#sx-searchbtn').onclick = () => { const s = $('#sx-search'); s.classList.toggle('hidden'); if (s.classList.contains('hidden')) { s.value = ''; renderTree(); } else s.focus(); };
 $('#sx-search').oninput = renderTree;
 $('#sx-addbtn').onclick = (e) => { const r = e.currentTarget.getBoundingClientRect(); menu(r.left, r.bottom + 4, [
-  { label: 'New request', run: () => placeTab(newTab(), true) },
+  { label: 'New request', run: () => newRequest() },
   { label: 'New collection', run: newCollection },
   { label: 'Import from Postman…', run: () => $('#sx-importfile').click() },
 ]); };
@@ -1157,7 +1159,7 @@ function renderPalette() {
   const all = [
     ...lib.requests.map(r => ({ html: mth(r.method) + esc(r.name), sub: locationOf(r.collectionId, r.folderId).join(' / ') || r.url, text: r.name + ' ' + r.url, run: () => openSaved(r.id, false) })),
     ...envs.map(e => ({ html: '⇄ Use environment: ' + esc(e.name), sub: 'environment', text: 'environment ' + e.name, run: () => setEnv(e.id) })),
-    { html: '+ New request', sub: 'action', text: 'new request tab', run: () => placeTab(newTab(), true) },
+    { html: '+ New request', sub: 'action', text: 'new request tab', run: () => newRequest() },
     { html: '+ New collection', sub: 'action', text: 'new collection', run: newCollection },
     { html: 'Manage environments', sub: 'action', text: 'environments variables manage', run: () => openEnvDialog(P.envId) },
     { html: 'Import from Postman', sub: 'action', text: 'import postman', run: () => $('#sx-importfile').click() },
