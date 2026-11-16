@@ -2,6 +2,26 @@
 const $ = (s) => document.querySelector(s);
 const fmtUs = (us) => us >= 1e6 ? (us / 1e6).toFixed(2) + 's' : us >= 1000 ? (us / 1000).toFixed(1) + 'ms' : us + 'µs';
 const ms = (v) => v < 1 ? Math.round(v * 1000) + 'µs' : v < 10 ? v.toFixed(1) + 'ms' : v < 1000 ? Math.round(v) + 'ms' : (v / 1000).toFixed(1) + 's';
+// In-app replacements for prompt()/confirm(). ask() resolves to the clicked
+// button's value ('ok', 'alt' or ''), plus the typed text when there is a field.
+function ask({ title, body = '', crumb = '', field = false, placeholder = '', taken = [], ok = 'OK', alt = '', danger = false }) {
+  const d = $('#ask'), inp = $('#ask-in'), okb = $('#ask-ok');
+  $('#ask-title').textContent = title; $('#ask-body').textContent = body; $('#ask-crumb').textContent = crumb;
+  $('#ask-alt').textContent = alt; okb.textContent = ok; okb.className = danger ? 'danger' : '';
+  $('#ask-field').hidden = !field; inp.value = ''; inp.placeholder = placeholder; $('#ask-err').textContent = '';
+  const low = taken.map(n => n.toLowerCase());
+  const check = () => {
+    const v = inp.value.trim(), dup = v && low.includes(v.toLowerCase());
+    okb.disabled = field && (!v || dup); inp.setAttribute('aria-invalid', !!dup);
+    $('#ask-err').textContent = dup ? `"${v}" already exists.` : '';
+  };
+  inp.oninput = check; check();
+  d.returnValue = ''; d.showModal();
+  (field ? inp : $('#ask-cancel')).focus(); // Cancel first: Enter never confirms a delete
+  return new Promise(r => d.addEventListener('close', () => r(field ? (d.returnValue === 'ok' ? inp.value.trim() : '') : d.returnValue), { once: true }));
+}
+const askName = (o) => ask({ field: true, ...o });
+const confirmAsk = async (o) => (await ask(o)) === 'ok';
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 const css = (v) => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
 
@@ -374,7 +394,7 @@ $('#btn-start').onclick = async () => {
 // Live run
 // =====================================================================
 $('#btn-stop').onclick = async () => {
-  if (!confirm('Stop this run? Results so far are kept.')) return;
+  if (!await confirmAsk({ title: 'Stop this load test?', body: 'Results so far are kept.', ok: 'Stop test', danger: true })) return;
   $('#btn-stop').disabled = true;
   $('#live-status').textContent = 'Stopping…';
   const res = await fetch(`/api/runs/${state.runId}/stop`, { method: 'POST' });

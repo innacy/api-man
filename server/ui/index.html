@@ -132,6 +132,12 @@
   .db label { display:grid; gap:4px; color:var(--muted); font-size:12px }
   .inp, .sx input:not([type=checkbox]):not([type=number]), .sx select, dialog input:not([type=checkbox]), dialog select { background:var(--mantle); color:var(--fg); border:1px solid var(--border); border-radius:4px; padding:.35rem .55rem; font:13px var(--mono); min-width:0 }
   .danger-text { color:var(--bad) !important }
+  dialog [hidden] { display:none }
+  #ask-body:empty, #ask-crumb:empty, #ask-err:empty, #ask-alt:empty { display:none }
+  #ask-body { color:var(--muted) } #ask-err { font-size:12px }
+  .crumb { width:max-content; max-width:100%; font-size:12px; color:var(--muted); background:var(--mantle); border:1px solid var(--border); border-radius:4px; padding:1px 6px }
+  dialog input:focus, dialog select:focus { outline:none; border-color:var(--accent); box-shadow:0 0 0 3px var(--accent-soft) }
+  dialog input[aria-invalid=true] { border-color:var(--bad) }
 
   /* ---------- load test pages ----------
      (unchanged layout) */
@@ -432,7 +438,7 @@
 <dialog id="sx-dlg">
   <form method="dialog">
     <div class="dh" id="sx-dlg-title">Save request</div>
-    <div class="db"><label>Name<input id="sx-dlg-name" required maxlength="200"></label><label>Collection / folder<select id="sx-dlg-col"></select></label></div>
+    <div class="db"><label>Name<input id="sx-dlg-name" required maxlength="200"></label><label>Collection / folder<select id="sx-dlg-col"></select></label><label id="sx-dlg-newcol" hidden>New collection name<input id="sx-dlg-newname" maxlength="200" placeholder="e.g. Billing API"></label></div>
     <div class="df"><button class="ghost" value="cancel" formnovalidate>Cancel</button><button value="ok">Save</button></div>
   </form>
 </dialog>
@@ -445,6 +451,14 @@
     <p class="hint" style="margin:0">Use a variable anywhere in a request as <code>{{name}}</code>.</p>
   </div>
   <div class="df"><span id="sx-envmsg" class="bad" style="margin-right:auto"></span><button class="ghost" id="sx-envclose">Close</button><button id="sx-envsave">Save</button></div>
+</dialog>
+<dialog id="ask">
+  <form method="dialog" autocomplete="off">
+    <div class="dh" id="ask-title"></div>
+    <div class="db"><span id="ask-body"></span><span class="crumb" id="ask-crumb"></span>
+      <label id="ask-field">Name<input id="ask-in" maxlength="200"></label><span class="bad" id="ask-err"></span></div>
+    <div class="df"><button id="ask-ok" value="ok" style="order:3"></button><button class="ghost" id="ask-cancel" value="" formnovalidate>Cancel</button><button class="ghost" id="ask-alt" value="alt" formnovalidate></button></div>
+  </form>
 </dialog>
 <dialog id="sx-keysdlg">
   <div class="dh">Keyboard shortcuts</div>

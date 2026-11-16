@@ -710,9 +710,18 @@ function placeTab(t, forceNew) {
 const closed = [];
 function remember(t) { if (!isPristine(t)) { closed.push(structuredClone(t)); if (closed.length > 20) closed.shift(); } }
 function reopenTab() { const t = closed.pop(); if (t) placeTab({ ...t, tid: newTab().tid }); }
-function closeTab(i) {
+// okToClose asks Save / Don't save / Cancel for a dirty tab; true means it may close.
+async function okToClose(i) {
   const t = tabs[i];
-  if (isDirty(t) && !confirm(`Close "${tabTitle(t)}" without saving?`)) return;
+  if (!isDirty(t)) return true;
+  const a = await ask({ title: 'Close without saving?', body: `"${tabTitle(t)}" has changes that aren't saved.`, alt: "Don't save", ok: 'Save' });
+  if (a === 'alt') return true;
+  if (a !== 'ok') return false;
+  switchTab(i); await save(false); return !isDirty(tabs[i]);
+}
+async function closeTab(i) {
+  if (!await okToClose(i)) return;
+  i = Math.min(i, tabs.length - 1); const t = tabs[i];
   dropResp(t.tid);
   remember(t);
   tabs.splice(i, 1);
@@ -740,7 +749,7 @@ $('#sx-tabs').addEventListener('contextmenu', (e) => {
     '-',
     { label: 'Close', key: 'Ctrl W', run: () => closeTab(active) },
     { label: 'Reopen closed tab', key: 'Ctrl Shift T', run: reopenTab },
-    { label: 'Close other tabs', run: () => { for (let j = tabs.length - 1; j >= 0; j--) if (j !== active) { if (isDirty(tabs[j]) && !confirm(`Close "${tabTitle(tabs[j])}" without saving?`)) continue; dropResp(tabs[j].tid); remember(tabs[j]); tabs.splice(j, 1); if (j < active) active--; } switchTab(active); } },
+    { label: 'Close other tabs', run: async () => { const keep = tabs[active]; for (const t of tabs.slice()) if (t !== keep && await okToClose(tabs.indexOf(t))) { dropResp(t.tid); remember(t); tabs.splice(tabs.indexOf(t), 1); } switchTab(tabs.indexOf(keep)); } },
   ]);
 });
 // Tab from saved form fields (or fields rebuilt from history).
@@ -820,21 +829,25 @@ async function save(asNew) {
     $('#sx-dlg-name').value = asNew && S.name ? S.name + ' copy' : S.name ||
       (S.method.toUpperCase() + ' ' + (new URL(S.url, 'http://x').pathname || '/'));
     $('#sx-dlg-col').innerHTML = placesHTML(S.folderId ? 'f:' + S.folderId : S.collectionId ? 'c:' + S.collectionId : '');
+    showNewCol();
     dlg.returnValue = '';
     dlg.showModal(); $('#sx-dlg-name').select();
     await new Promise(r => dlg.addEventListener('close', r, { once: true }));
     if (dlg.returnValue !== 'ok') return;
     let place = $('#sx-dlg-col').value;
-    if (place === 'new') {
-      const n = prompt('New collection name');
-      if (!n?.trim()) return;
-      place = 'c:' + (await api('POST', '/api/collections', { name: n })).id;
-    }
+    if (place === 'new') place = 'c:' + (await api('POST', '/api/collections', { name: $('#sx-dlg-newname').value.trim() })).id;
     const { collectionId, folderId } = parsePlace(place);
     await storeReq(null, $('#sx-dlg-name').value.trim(), collectionId, folderId);
   } catch (e) { toast(e.message, true); }
 }
 $('#sx-save').onclick = () => save(false);
+// "+ New collection…" in the Save dialog shows a name field in place; required keeps Save from closing on a blank name.
+function showNewCol() {
+  const on = $('#sx-dlg-col').value === 'new', i = $('#sx-dlg-newname');
+  $('#sx-dlg-newcol').hidden = !on; i.required = on; i.value = '';
+  if (on) i.focus();
+}
+$('#sx-dlg-col').onchange = showNewCol;
 
 const ago = (iso) => {
   const s = (Date.now() - Date.parse(iso)) / 1000;
@@ -878,12 +891,16 @@ function renderTree() {
 }
 
 async function newCollection() {
-  const n = prompt('New collection name');
-  if (n?.trim()) { try { await api('POST', '/api/collections', { name: n }); await loadLibrary(); } catch (e) { toast(e.message, true); } }
+  const n = await askName({ title: 'New collection', body: 'Group related requests, for example one collection per API.', placeholder: 'e.g. Payments API', ok: 'Create collection', taken: lib.collections.map(c => c.name) });
+  if (n) { try { await api('POST', '/api/collections', { name: n }); await loadLibrary(); } catch (e) { toast(e.message, true); } }
 }
 async function newFolder(collectionId, parentId) {
-  const n = prompt('New folder name');
-  if (!n?.trim()) return;
+  const path = [];
+  for (let f = lib.folders.find(x => x.id === parentId); f; f = lib.folders.find(x => x.id === f.parentId)) path.unshift(f.name);
+  path.unshift(lib.collections.find(c => c.id === collectionId)?.name);
+  const n = await askName({ title: 'New folder', crumb: 'in ' + path.join(' › '), placeholder: 'e.g. Webhooks', ok: 'Create folder',
+    taken: lib.folders.filter(f => f.collectionId === collectionId && f.parentId === parentId).map(f => f.name) });
+  if (!n) return;
   try {
     await api('POST', '/api/folders', { collectionId, parentId, name: n });
     delete P.collapsed[parentId ? 'f' + parentId : 'c' + collectionId];
@@ -927,7 +944,9 @@ function requestsUnder(kind, id) {
 async function deleteItem(kind, id) {
   const gone = kind === 'r' ? lib.requests.filter(r => r.id === id) : requestsUnder(kind, id), n = gone.length;
   const what = kind === 'c' ? 'collection' : kind === 'f' ? 'folder' : 'saved request';
-  if (!confirm(`Delete this ${what}${kind !== 'r' && n ? ` and its ${n} request${n > 1 ? 's' : ''}` : ''}?`)) return;
+  const name = kind === 'c' ? lib.collections.find(c => c.id === id)?.name : kind === 'f' ? lib.folders.find(f => f.id === id)?.name : gone[0]?.name;
+  if (!await confirmAsk({ title: `Delete ${what}?`, ok: 'Delete', danger: true,
+    body: `"${name}"${kind !== 'r' && n ? ` and its ${n} request${n > 1 ? 's' : ''}` : ''} will be deleted. This can't be undone.` })) return;
   try {
     await api('DELETE', `/api/${{ c: 'collections', f: 'folders', r: 'requests' }[kind]}/${id}`);
     // Open tabs keep their contents but become unsaved copies.
@@ -990,7 +1009,7 @@ $('#sx-list').addEventListener('click', async (e) => {
   if (t('#sx-firstimport')) return $('#sx-importfile').click();
   if (t('#sx-histback')) { P.side = 'tree'; renderTree(); saveState(); return; }
   if (t('#sx-histclear')) {
-    if (!confirm('Clear all request history?')) return;
+    if (!await confirmAsk({ title: 'Clear all request history?', body: "This can't be undone.", ok: 'Clear history', danger: true })) return;
     try { await api('DELETE', '/api/history'); await loadReqHistory(); renderTree(); } catch (err) { toast(err.message, true); }
     return;
   }
@@ -1221,7 +1240,7 @@ $('#sx-envsave').onclick = async () => {
   } catch (err) { $('#sx-envmsg').className = 'bad'; $('#sx-envmsg').textContent = err.message; }
 };
 $('#sx-envdel').onclick = async () => {
-  if (!E.id || !confirm(`Delete environment "${E.name}"?`)) return;
+  if (!E.id || !await confirmAsk({ title: 'Delete environment?', body: `"${E.name}" and its variables will be deleted.`, ok: 'Delete', danger: true })) return;
   try {
     await api('DELETE', `/api/environments/${E.id}`);
     await loadEnvs(); saveState();
