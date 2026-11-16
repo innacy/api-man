@@ -224,7 +224,7 @@
   .tab .nm { overflow:hidden; text-overflow:ellipsis } .tab .mth { width:auto }
   .tab .dot { width:7px; height:7px; border-radius:50%; background:var(--accent); flex:none }
   .tab .xx { padding:1px; visibility:hidden } .tab:hover .xx, .tab.on .xx { visibility:visible } .tab .dot + .xx { display:none } .tab:hover .dot { display:none } .tab:hover .dot + .xx { display:grid }
-  .tab-add { align-self:center; margin-left:2px }
+  .tab-add { align-self:flex-end; margin:0 0 3px 2px } /* centred on the 30px tabs, which sit 1px low */
   .urlbar { display:flex; gap:10px; align-items:center; padding:8px 14px 6px }
   .url { flex:1; display:flex; align-items:center; gap:6px; height:36px; border:1px solid var(--border); border-radius:5px; padding:0 6px 0 4px; background:var(--mantle); min-width:0 }
   .url:focus-within { border-color:var(--accent) }
@@ -277,6 +277,8 @@
   .restool { position:sticky; top:0; z-index:1; background:var(--bg); display:flex; gap:.6rem; align-items:center; flex-wrap:wrap; padding:2px 0 8px }
   .restool .sp { margin-left:auto; display:flex; gap:.4rem; align-items:center }
   .restool button.ghost { padding:.2rem .6rem; font-size:12px }
+  .find { display:flex; gap:4px; align-items:center; width:100%; font-size:12px; color:var(--muted) } .find input { flex:1; max-width:260px }
+  ::highlight(find) { background:var(--accent-soft); color:inherit } ::highlight(find-cur) { background:var(--accent); color:var(--onaccent) }
   .codebox { display:flex; min-width:100%; width:max-content; font:12.5px/1.6 var(--mono) } .codebox.wrap { width:100% }
   .gutter { position:sticky; left:0; margin:0; padding:0 12px 0 0; text-align:right; color:var(--muted); background:var(--bg); user-select:none; font:inherit; min-width:3em } .codebox.wrap .gutter { display:none }
   .code { font:12.5px/1.6 var(--mono); white-space:pre; margin:0; flex:1 }

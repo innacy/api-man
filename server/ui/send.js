@@ -402,6 +402,45 @@ $('#sx-url').addEventListener('paste', async (e) => {
   renderEditor(); saveState();
 });
 
+// Find in response (Ctrl+F). Matches are painted with the CSS Highlight API,
+// so the rendered response is never modified.
+// ponytail: a match that spans two syntax-coloured tokens isn't found; join text nodes if that matters.
+let findQ = null, findI = 0;
+function openFind() {
+  if (!res || res.error) return;
+  if (S.resTab !== 'body') S.resTab = 'body';
+  if (findQ === null) findQ = '';
+  renderRes(); $('#sx-find').focus(); $('#sx-find').select();
+}
+function runFind() {
+  CSS.highlights?.clear();
+  const n = $('#sx-findn'), root = document.querySelector('#sx-out pre.code');
+  if (!n) return;
+  const q = findQ.toLowerCase(), ranges = [];
+  if (q && root) {
+    const w = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    for (let t; (t = w.nextNode());) {
+      const low = t.data.toLowerCase();
+      for (let i = low.indexOf(q); i >= 0; i = low.indexOf(q, i + q.length)) { const r = new Range(); r.setStart(t, i); r.setEnd(t, i + q.length); ranges.push(r); }
+    }
+  }
+  if (!ranges.length) { n.textContent = q ? 'No matches' : ''; return; }
+  findI = (findI + ranges.length) % ranges.length;
+  n.textContent = `${findI + 1} of ${ranges.length}`;
+  const cur = ranges[findI];
+  if (window.Highlight) { CSS.highlights.set('find', new Highlight(...ranges)); CSS.highlights.set('find-cur', new Highlight(cur)); }
+  else { const sel = getSelection(); sel.removeAllRanges(); sel.addRange(cur); } // older WebKit (macOS 11-13): select the current match
+  const box = $('#sx-respane'), rr = cur.getBoundingClientRect(), br = box.getBoundingClientRect();
+  if (rr.top < br.top + 40 || rr.bottom > br.bottom) box.scrollTop += rr.top - br.top - br.height / 2;
+}
+$('#sx-respane').addEventListener('input', (e) => { if (e.target.id === 'sx-find') { findQ = e.target.value; findI = 0; runFind(); } });
+$('#sx-respane').addEventListener('keydown', (e) => {
+  if (e.target.id !== 'sx-find') return;
+  if (e.key === 'Enter') { e.preventDefault(); findI += e.shiftKey ? -1 : 1; runFind(); }
+  else if (e.key === 'Escape') { e.stopPropagation(); findQ = null; renderRes(); }
+});
+$('#sx-respane').addEventListener('click', (e) => { if (e.target.closest('#sx-findx')) { findQ = null; renderRes(); } });
+
 async function sendNow() {
   const btn = $('#sx-send');
   if (btn.disabled) return;
@@ -440,12 +479,12 @@ const onSend = () => !$('#view-send').classList.contains('hidden');
 // character the layout puts on Alt+key.
 const SHORTCUTS = [
   ['Ctrl Enter', 'Send the request'], ['Ctrl S', 'Save'], ['Ctrl Shift S', 'Save as new request'],
-  ['Ctrl K', 'Search requests, environments and actions (also Ctrl P)'], ['Ctrl L', 'Go to the URL box'],
+  ['Ctrl K', 'Search requests, environments and actions (also Ctrl P)'], ['Ctrl L', 'Go to the URL box'], ['Ctrl F', 'Find in the response (Enter next, Shift Enter previous)'],
   ['Ctrl N', 'New request tab (also Ctrl T)'], ['Ctrl W', 'Close the tab (also Ctrl F4)'], ['Ctrl Shift T', 'Reopen the last closed tab'],
   ['Ctrl Tab', 'Next tab (also Ctrl PgDn)'], ['Ctrl Shift Tab', 'Previous tab (also Ctrl PgUp)'], ['Ctrl 1 … 8', 'Go to tab 1 … 8'], ['Ctrl 9', 'Go to the last tab'],
   ['Ctrl /', 'Comment out lines in a JSON body'], ['Shift Alt F', 'Format the JSON body (also Ctrl Shift F)'], ['Tab', 'Indent in the body editor'],
   ['Ctrl B', 'Show or hide the sidebar'], ['Ctrl J', 'Show or hide the response'], ['Alt L', 'Response on the right or below'], ['Alt Z', 'Wrap or unwrap the response'],
-  ['F2', 'Rename the selected sidebar item'], ['F1', 'Show these shortcuts (also ?)'], ['Esc', 'Close menus and dialogs'],
+  ['F2', 'Rename the selected sidebar item'], ['Delete', 'Delete the selected sidebar item (Shift Delete skips the question)'], ['F1', 'Show these shortcuts (also ?)'], ['Esc', 'Close menus and dialogs'],
 ];
 function showShortcuts() {
   $('#sx-keys').innerHTML = SHORTCUTS.map(([k, d]) => `<tr><td>${k.split(' ').map(x => x === '…' ? '…' : `<kbd>${esc(x)}</kbd>`).join(' ')}</td><td>${esc(d)}</td></tr>`).join('');
@@ -468,6 +507,7 @@ document.addEventListener('keydown', (e) => {
   if (mod && e.key === 'Enter') { e.preventDefault(); sendNow(); }
   else if (mod && !e.altKey && key === 's') { e.preventDefault(); save(e.shiftKey); }
   else if (((e.shiftKey && e.altKey && !mod && e.code === 'KeyF') || (mod && e.shiftKey && key === 'f')) && S.bodyMode === 'json' && S.reqTab === 'body') { e.preventDefault(); beautify(); }
+  else if (mod && !e.shiftKey && !e.altKey && key === 'f') { e.preventDefault(); openFind(); }
   else if (mod && !e.shiftKey && !e.altKey && key === 'l') { e.preventDefault(); $('#sx-url').focus(); $('#sx-url').select(); }
   else if ((mod && !e.altKey && !e.shiftKey && (key === 'n' || key === 't')) || (alt && e.code === 'KeyN')) { e.preventDefault(); newRequest(); }
   else if ((mod && !e.altKey && !e.shiftKey && (key === 'w' || e.key === 'F4')) || (alt && e.code === 'KeyW')) { e.preventDefault(); closeTab(active); }
@@ -480,6 +520,7 @@ document.addEventListener('keydown', (e) => {
   else if ((mod && !e.altKey && !e.shiftKey && key === 'j') || (alt && e.code === 'KeyR')) { e.preventDefault(); toggleRes(); }
   else if (alt && e.code === 'KeyZ') { e.preventDefault(); setWrap(!P.wrap); }
   else if (alt && e.code === 'KeyL') { e.preventDefault(); P.resDown = !P.resDown; applySide(); saveState(); }
+  else if ((e.key === 'Delete' || (e.metaKey && e.key === 'Backspace')) && !typing && lastRow) { e.preventDefault(); deleteItem(lastRow.kind, lastRow.id, e.shiftKey); }
   else if (e.key === 'F2' && !typing && lastRow) { e.preventDefault(); renameItem(lastRow.kind, lastRow.id); }
 });
 
@@ -526,6 +567,7 @@ function numberLines(p, n) {
 }
 
 function renderRes() {
+  queueMicrotask(runFind); // re-highlight once this render has finished
   const pane = $('#sx-respane'), meta = $('#sx-meta');
   document.querySelectorAll('#sx-restabs > button').forEach(b => {
     b.classList.toggle('on', b.dataset.v === S.resTab);
@@ -565,6 +607,7 @@ function renderRes() {
       <span class="seg" id="sx-view">${['pretty', 'raw', 'preview', 'hex'].map(v => `<button data-v="${v}" class="${S.view === v ? 'on' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</span>
       <span class="sp"><label title="Alt+Z"><input type="checkbox" id="sx-wrap" ${P.wrap ? 'checked' : ''}> Wrap</label>
       <button class="ghost" id="sx-copy">Copy</button><button class="ghost" id="sx-dl">Download</button></span>
+      ${findQ !== null ? `<div class="find"><input id="sx-find" placeholder="Find in response" value="${esc(findQ)}" spellcheck="false" aria-label="Find in response"><span id="sx-findn"></span><button class="ib" id="sx-findx" title="Close (Esc)">${ICO.x}</button></div>` : ''}
     </div>${res.truncated ? `<p class="hint bad">Showing the first ${fmtBytes(bytes.length)} of ${fmtBytes(res.size)}.</p>` : ''}<div id="sx-out"></div>`;
   const out = $('#sx-out');
   const pre = (numbered = true) => {
@@ -943,11 +986,12 @@ function requestsUnder(kind, id) {
   for (let grew = true; grew;) { grew = false; for (const f of lib.folders) if (ids.has(f.parentId) && !ids.has(f.id)) { ids.add(f.id); grew = true; } }
   return lib.requests.filter(r => ids.has(r.folderId));
 }
-async function deleteItem(kind, id) {
+async function deleteItem(kind, id, noAsk = false) {
   const gone = kind === 'r' ? lib.requests.filter(r => r.id === id) : requestsUnder(kind, id), n = gone.length;
   const what = kind === 'c' ? 'collection' : kind === 'f' ? 'folder' : 'saved request';
   const name = kind === 'c' ? lib.collections.find(c => c.id === id)?.name : kind === 'f' ? lib.folders.find(f => f.id === id)?.name : gone[0]?.name;
-  if (!await confirmAsk({ title: `Delete ${what}?`, ok: 'Delete', danger: true,
+  if (!name) return; // already gone (stale selection)
+  if (!noAsk && !await confirmAsk({ title: `Delete ${what}?`, ok: 'Delete', danger: true,
     body: `"${name}"${kind !== 'r' && n ? ` and its ${n} request${n > 1 ? 's' : ''}` : ''} will be deleted. This can't be undone.` })) return;
   try {
     await api('DELETE', `/api/${{ c: 'collections', f: 'folders', r: 'requests' }[kind]}/${id}`);
