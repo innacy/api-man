@@ -23,7 +23,7 @@ function fromPostman(json) {
         if (ev.pre || ev.post) folderMeta[path.map(p => '\0' + p).join('')] = ev; // same key the server builds
         walk(it.item, path, itAuth, itFollow); continue;
       }
-      const data = { ...requestForm(it.request ?? '', itAuth, itFollow, warnings), preScript: ev.pre, postScript: ev.post };
+      const data = { ...requestForm(it.request ?? '', itAuth, itFollow, warnings), preScript: ev.pre, postScript: ev.post, ...(ev.pre || ev.post ? { scriptsReview: true } : {}) };
       requests.push({ name: it.name || data.url || 'Untitled request', folder, method: data.method, url: data.url, data });
     }
   };

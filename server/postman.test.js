@@ -57,6 +57,7 @@ test('collection: names, urls, headers, inherited auth, bodies, variables', () =
   assert.deepEqual(JSON.parse(gql.body), { query: '{ me { id } }', variables: { a: 1 } });
   assert.deepEqual(c.meta, { vars: [{ on: true, k: 'host', v: 'http://localhost:8080' }, { on: false, k: 'off', v: 'x' }], scriptsReview: true });
   assert.equal(c.requests.find(r => r.name === 'Create').data.postScript, 'pm.test("ok")');
+  assert.equal(c.requests.find(r => r.name === 'Create').data.scriptsReview, true); // flag travels with the request
   assert.equal(c.warnings.length, 3); // file field, form-data as urlencoded, oauth2
 });
 

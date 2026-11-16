@@ -10,7 +10,7 @@ const TABS_KEY = 'apiperf-send-tabs', PREFS_KEY = 'apiperf-send-prefs', OLD_DRAF
 const RESP_KEY = 'apiperf-resp-', RESP_KEEP_MAX = 1 << 20; // each tab's last response is kept across reloads up to 1 MB
 const blank = () => ({ on: true, k: '', v: '', d: '' });
 // The fields that make up a request; what Save stores and what "unsaved" compares.
-const FORM_KEYS = ['method', 'url', 'params', 'headers', 'auth', 'bodyMode', 'body', 'form', 'follow', 'insecure', 'timeout', 'noCookies', 'preScript', 'postScript'];
+const FORM_KEYS = ['method', 'url', 'params', 'headers', 'auth', 'bodyMode', 'body', 'form', 'follow', 'insecure', 'timeout', 'noCookies', 'preScript', 'postScript', 'scriptsReview'];
 const newTab = (extra = {}) => ({
   tid: Math.random().toString(36).slice(2),
   method: 'GET', url: '', params: [], headers: [], auth: { type: 'none' }, bodyMode: 'none', body: '', form: [],
@@ -518,13 +518,32 @@ async function saveScriptVars(before, after, t) {
   if (env && !same(before.environment, after.environment)) { env.vars = after.environment; await api('PUT', `/api/environments/${env.id}`, { name: env.name, vars: env.vars }); }
   renderURL();
 }
-// reviewScripts: an imported collection's scripts only run once you've agreed to.
+// reviewScripts: imported scripts only run once you've agreed to. The flag is on
+// the collection and on each imported request (in its saved data), so it
+// follows a request that is moved, duplicated or detached from its collection.
 async function reviewScripts(t) {
   const col = lib.collections.find(c => c.id === t.collectionId);
-  if (!metaOf(col).scriptsReview) return true;
+  if (!metaOf(col).scriptsReview && !t.scriptsReview) return true;
   const a = await ask({ title: 'Run this collection\'s scripts?', ok: 'Run scripts', alt: 'Send without scripts',
     body: `"${col.name}" was imported with scripts. They run without network access, but they can read and change your variables. Check them under the request's Scripts tab and the collection's ⋯ → Scripts… first.` });
-  if (a === 'ok') { const { scriptsReview, ...m } = metaOf(col); col.meta = m; await api('PUT', `/api/collections/${col.id}/meta`, m).catch(e => toast(e.message, true)); return true; }
+  if (a === 'ok') {
+    try {
+      if (metaOf(col).scriptsReview) {
+        const { scriptsReview, ...m } = metaOf(col); col.meta = m;
+        await api('PUT', `/api/collections/${col.id}/meta`, m);
+      }
+      // Clear the flag on the saved copies too: this tab's request and, for an approved collection, all of its requests.
+      const ids = new Set([t.savedId, ...(col ? lib.requests.filter(r => r.collectionId === col.id).map(r => r.id) : [])].filter(Boolean));
+      for (const id of ids) {
+        const r = await api('GET', `/api/requests/${id}`);
+        if (!r.data?.scriptsReview) continue;
+        const { scriptsReview, ...data } = r.data;
+        await api('PUT', `/api/requests/${id}`, { collectionId: r.collectionId, folderId: r.folderId, name: r.name, method: r.method, url: r.url, data });
+      }
+      tabs.forEach(x => { if (x === t || ids.has(x.savedId)) { const dirty = isDirty(x); x.scriptsReview = false; if (!dirty) x.snapshot = JSON.stringify(formOf(x)); } });
+    } catch (e) { toast(e.message, true); }
+    return true;
+  }
   return a === 'alt' ? false : null;
 }
 
