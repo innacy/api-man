@@ -386,10 +386,14 @@ $('#sx-url').oninput = (e) => {
   saveState();
 };
 // Pasting a curl command into the URL box fills the whole form.
-$('#sx-url').addEventListener('paste', async (e) => {
+$('#sx-url').addEventListener('paste', (e) => {
   const pasted = e.clipboardData.getData('text');
   if (!/^\s*curl\s/.test(pasted)) return;
   e.preventDefault();
+  fillFromCurl(pasted);
+});
+// fillFromCurl fills the current tab from a curl command.
+async function fillFromCurl(pasted) {
   const r = await fetch('/api/curl', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ curl: pasted }) });
   const j = await r.json();
   if (!r.ok) { $('#sx-err').textContent = 'Could not read that curl: ' + j.error; return; }
@@ -402,7 +406,7 @@ $('#sx-url').addEventListener('paste', async (e) => {
     bodyMode: !j.body ? 'none' : /json/.test(ct) ? 'json' : /xml/.test(ct) ? 'xml' : 'text',
   });
   renderEditor(); saveState();
-});
+}
 
 // Find in response (Ctrl+F). Matches are painted with the CSS Highlight API,
 // so the rendered response is never modified.
@@ -504,14 +508,15 @@ document.addEventListener('keydown', (e) => {
   if (document.querySelector('dialog[open]') || !$('#pal').classList.contains('hidden')) return;
   if ((mod && !e.altKey && !e.shiftKey && key === 'b') || (alt && e.code === 'KeyB')) { e.preventDefault(); P.sideHidden = !P.sideHidden; applySide(); return saveState(); }
   if (e.key === 'F1' || (!typing && !mod && !e.altKey && e.key === '?')) { e.preventDefault(); return showShortcuts(); }
-  if (!onSend()) return;
+  const newKey = (mod && !e.altKey && !e.shiftKey && (key === 'n' || key === 't')) || (alt && e.code === 'KeyN');
+  if (!onSend()) { if (newKey && !$('#view-home').classList.contains('hidden')) { e.preventDefault(); newRequest(); } return; }
   const go = (i) => { e.preventDefault(); if (tabs.length) switchTab((i + tabs.length) % tabs.length); };
   if (mod && e.key === 'Enter') { e.preventDefault(); sendNow(); }
   else if (mod && !e.altKey && key === 's') { e.preventDefault(); save(e.shiftKey); }
   else if (((e.shiftKey && e.altKey && !mod && e.code === 'KeyF') || (mod && e.shiftKey && key === 'f')) && S.bodyMode === 'json' && S.reqTab === 'body') { e.preventDefault(); beautify(); }
   else if (mod && !e.shiftKey && !e.altKey && key === 'f') { e.preventDefault(); openFind(); }
   else if (mod && !e.shiftKey && !e.altKey && key === 'l') { e.preventDefault(); $('#sx-url').focus(); $('#sx-url').select(); }
-  else if ((mod && !e.altKey && !e.shiftKey && (key === 'n' || key === 't')) || (alt && e.code === 'KeyN')) { e.preventDefault(); newRequest(); }
+  else if (newKey) { e.preventDefault(); newRequest(); }
   else if ((mod && !e.altKey && !e.shiftKey && (key === 'w' || e.key === 'F4')) || (alt && e.code === 'KeyW')) { e.preventDefault(); closeTab(active); }
   else if ((mod || e.altKey) && e.shiftKey && e.code === 'KeyT') { e.preventDefault(); reopenTab(); }
   else if (mod && e.key === 'Tab') go(active + (e.shiftKey ? -1 : 1));
@@ -747,7 +752,7 @@ function switchTab(i) {
 }
 // placeTab opens t: into the current tab when that one is empty, else a new tab.
 // New blank tab with the URL box focused, ready for a paste.
-function newRequest() { placeTab(newTab(), true); requestAnimationFrame(() => $('#sx-url').focus()); }
+function newRequest() { show('send'); placeTab(newTab(), true); requestAnimationFrame(() => $('#sx-url').focus()); } // show now: hashchange is async
 function placeTab(t, forceNew) {
   if (!forceNew && isPristine(S)) { dropResp(S.tid); tabs[active] = t; switchTab(active); }
   else { tabs.push(t); switchTab(tabs.length - 1); }
@@ -845,7 +850,7 @@ async function loadLibrary() {
   renderTree(); renderChrome();
 }
 async function loadReqHistory() {
-  try { hist = await api('GET', '/api/history'); $('#f-histn').textContent = hist.length || ''; if (P.side === 'history') renderTree(); } catch (e) { toast(e.message, true); }
+  try { hist = await api('GET', '/api/history'); $('#f-histn').textContent = hist.length || ''; if (P.side === 'history') renderTree(); if (!$('#view-home').classList.contains('hidden')) renderHome(); } catch (e) { toast(e.message, true); }
 }
 
 async function storeReq(id, name, collectionId, folderId) {
@@ -1142,8 +1147,56 @@ $('#f-history').onclick = () => { P.side = P.side === 'history' ? 'tree' : 'hist
 $('#f-env').onclick = () => openEnvDialog(P.envId);
 $('#f-load').onclick = () => go('#new');
 $('#f-runs').onclick = () => go('#history');
-$('#brand').onclick = () => go('#send');
+$('#brand').onclick = () => go('#home');
+$('#f-home').onclick = () => go('#home');
+
+// ---------- Home ----------
+async function renderHome() {
+  const h = new Date().getHours(), greet = h < 12 ? 'Good morning' : h < 18 ? 'Good afternoon' : 'Good evening';
+  const open = tabs.filter(t => !isPristine(t)).length;
+  const runs = await api('GET', '/api/runs').catch(() => []);
+  const ok = (st) => st >= 200 && st < 400 ? 'good' : 'bad';
+  const histRows = hist.slice(0, 8).map(x => `<div class="row" data-hist="${x.id}" title="${esc(x.url)}"><span class="mth m-${esc(x.method)}">${esc(x.method)}</span>
+    <span class="u">${esc(x.url.replace(/^https?:\/\//, ''))}</span>${x.error ? '<small class="bad">error</small>' : `<small class="${ok(x.status)}">${x.status}</small>`}<small>${ago(x.at)}</small></div>`).join('');
+  const runRows = runs.filter(x => x.status !== 'pending').slice(0, 6).map(x => `<div class="row" data-run="${x.id}" title="${esc(redact(x.curl))}">
+    <span class="u">${esc(redact(x.curl).replace(/^curl\s+/, ''))}</span><small class="${x.status === 'completed' ? '' : 'bad'}">${x.peak ? 'p99 ' + fmtUs(x.peak.p99Us) : esc(x.status)}</small></div>`).join('');
+  $('#view-home').innerHTML = `
+    <div class="home-hi"><h2>${greet}</h2>${open ? `<button class="linkbtn" data-h="resume">${open} open tab${open > 1 ? 's' : ''} · Resume ›</button>` : ''}</div>
+    <div class="home-act">
+      <button class="pri" data-h="new"><b>New request</b><span>Blank tab, cursor in the URL box</span><kbd>Ctrl N</kbd></button>
+      <button data-h="col"><b>New collection</b><span>Group requests per API</span></button>
+      <button data-h="import"><b>Import</b><span>Postman collection or environment</span></button>
+      <button data-h="load"><b>New load test</b><span>Ramp a request up to 1M calls</span></button>
+    </div>
+    <div class="home-paste">Paste a curl command anywhere on this page to open it as a request</div>
+    <div class="home-cols">
+      <div class="home-list"><div class="lh">Recent requests <button class="linkbtn" data-h="hist">History ›</button></div>${histRows || '<div class="row none">Requests you send appear here.</div>'}</div>
+      <div class="home-list"><div class="lh">Recent load tests <button class="linkbtn" data-h="runs">All ›</button></div>${runRows || '<div class="row none">No load tests yet.</div>'}</div>
+    </div>`;
+}
+$('#view-home').addEventListener('click', async (e) => {
+  const t = (sel) => e.target.closest(sel);
+  const a = t('[data-h]')?.dataset.h;
+  if (a === 'new') return newRequest();
+  if (a === 'resume') return go('#send');
+  if (a === 'col') return newCollection();
+  if (a === 'import') return $('#sx-importfile').click();
+  if (a === 'load') return go('#new');
+  if (a === 'runs') return go('#history');
+  if (a === 'hist') { P.side = 'history'; renderTree(); saveState(); return; }
+  if (t('[data-run]')) return go('#run/' + t('[data-run]').dataset.run);
+  if (t('[data-hist]')) {
+    try { const h = await api('GET', `/api/history/${t('[data-hist]').dataset.hist}`); placeTab(tabFrom(formFromSent(h.data)), true); } catch (err) { toast(err.message, true); }
+  }
+});
+document.addEventListener('paste', (e) => {
+  const text = e.clipboardData.getData('text');
+  if ($('#view-home').classList.contains('hidden') || e.target.closest?.('input, textarea') || !/^\s*curl\s/.test(text)) return;
+  e.preventDefault(); newRequest(); fillFromCurl(text);
+});
 document.addEventListener('viewchange', (e) => {
+  $('#f-home').classList.toggle('on', e.detail === 'home');
+  if (e.detail === 'home') renderHome();
   $('#f-load').classList.toggle('on', e.detail === 'setup');
   $('#f-runs').classList.toggle('on', e.detail === 'history' || e.detail === 'report' || e.detail === 'live');
 });

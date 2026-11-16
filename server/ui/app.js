@@ -58,8 +58,8 @@ document.querySelectorAll('#accents button').forEach(b =>
   b.onclick = () => applyAccent(b.dataset.accent));
 
 function show(view) {
-  for (const v of ['send', 'setup', 'live', 'report', 'history']) $('#view-' + v).classList.toggle('hidden', v !== view);
-  $('#pages').classList.toggle('hidden', view === 'send');
+  for (const v of ['home', 'send', 'setup', 'live', 'report', 'history']) $('#view-' + v).classList.toggle('hidden', v !== view);
+  $('#pages').classList.toggle('hidden', view === 'send' || view === 'home');
   document.dispatchEvent(new CustomEvent('viewchange', { detail: view }));
 }
 // The URL hash is the source of truth for which view is open, so a reload
@@ -69,7 +69,8 @@ function route() {
   if (m) loadReport(+m[1]);
   else if (location.hash === '#history') { loadHistory(); show('history'); }
   else if (location.hash === '#new') show('setup');
-  else show('send');
+  else if (location.hash === '#send') show('send');
+  else show('home'); // the app opens on Home
 }
 function go(hash) {
   if (location.hash === hash) route(); else location.hash = hash;

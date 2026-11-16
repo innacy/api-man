@@ -41,7 +41,7 @@ func runWindow() error {
 		AssetServer: &assetserver.Options{
 			Handler: http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 				w.Header().Set("Content-Type", "text/html")
-				w.Write([]byte(`<script>location.replace("http://localhost:7071/#send")</script>`))
+				w.Write([]byte(`<script>location.replace("http://localhost:7071/#home")</script>`))
 			}),
 		},
 	})
