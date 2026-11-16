@@ -25,11 +25,13 @@
 - **Requests**: any HTTP method, query params, headers, body, with a per-request timeout, redirect and TLS-verification setting.
 - **Auth**: Bearer token, Basic auth and API key.
 - **Collections**: group saved requests into collections and folders, and search everything with <kbd>Ctrl</kbd>+<kbd>K</kbd>.
-- **Environments**: define variables and use them anywhere as `{{name}}`.
+- **Variables**: use `{{name}}` anywhere. Define them per environment, per collection (collection ⋯ → Variables) or globally (Environments → Globals); environment beats collection beats global, as in Postman. Hover a variable in the URL bar to see its value and where it comes from.
+- **Scripts**: Postman-compatible pre-request and post-response scripts (`pm.*`) on requests, folders and collections, with `pm.test` results in a Tests tab. Scripts run in a sandbox with no network access; `pm.sendRequest` and `require` aren't supported.
+- **Cookies**: cookies set by responses are saved per site and sent back automatically, like a browser. Manage them under **Cookies** in the bottom bar, or turn them off per request in Settings.
 - **History**: every request you send is recorded and can be reopened.
 - **Paste a curl**: paste a curl command into the URL bar and it becomes a request.
 - **Code generation**: export any request as cURL, JavaScript (fetch), Python (requests), Go (net/http), HTTPie or PowerShell.
-- **Postman import**: import Postman collections (v2.0/v2.1) and environments.
+- **Postman import**: import Postman collections (v2.0/v2.1, including variables and scripts), environments and globals.
 
 ### Load testing
 - **Staged ramp**: from 100 to 1M requests at rising concurrency, with an editable stage plan.
@@ -40,7 +42,7 @@
 - **Run history**: every run is stored and can be reopened later.
 
 ### App
-- **Native desktop app** for Windows, macOS and Linux, with no browser required.
+- **Native desktop app** for Windows, macOS and Linux, with no browser required. It opens on a Home page with quick actions and recent work.
 - **Local only**: requests, history and environments stay in a local database on your machine. Nothing is synced or sent anywhere. The only outbound call is a check for new versions.
 - **Update notice**: an "Update available" button appears in the title bar when a new release is out.
 - **Themes**: light and dark modes plus several accent colors.
@@ -96,6 +98,8 @@ Your data is not removed by uninstalling. Delete the data folder (see [Data](#da
 | <kbd>Ctrl</kbd>+<kbd>1</kbd>…<kbd>8</kbd>, <kbd>Ctrl</kbd>+<kbd>9</kbd> | Go to tab N, last tab |
 | <kbd>Ctrl</kbd>+<kbd>K</kbd> or <kbd>Ctrl</kbd>+<kbd>P</kbd> | Search everything |
 | <kbd>Ctrl</kbd>+<kbd>L</kbd> | Focus the URL bar |
+| <kbd>Ctrl</kbd>+<kbd>F</kbd> | Find in the response |
+| <kbd>Delete</kbd> / <kbd>Shift</kbd>+<kbd>Delete</kbd> | Delete the selected sidebar item (Shift skips the question) |
 | <kbd>Ctrl</kbd>+<kbd>B</kbd> | Show / hide the sidebar |
 | <kbd>Ctrl</kbd>+<kbd>J</kbd> | Show / hide the response |
 | <kbd>Shift</kbd>+<kbd>Alt</kbd>+<kbd>F</kbd> | Format the JSON body |
@@ -140,7 +144,7 @@ go build -o apiperf . && ./apiperf -headless   # browser mode, no Wails needed
 
 ```sh
 go test ./...                   # unit, integration and e2e tests
-node --test server/*.test.js    # UI logic: code generation, Postman import
+node --test server/*.test.js    # UI logic: code generation, Postman import, scripts
 ```
 
 The e2e suite in `e2e/` builds the real binary and drives it over HTTP. It needs port 7071 free, so close the app first.

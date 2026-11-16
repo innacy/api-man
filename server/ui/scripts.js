@@ -27,7 +27,7 @@ function runScripts(ctx) {
       get: (k) => live().find(r => r.k === k)?.v,
       has: (k) => live().some(r => r.k === k),
       set: (k, v) => {
-        if (!rows()) return console.warn(`pm.${name === 'collection' ? 'collectionVariables' : name}.set("${k}") ignored: no environment is selected.`);
+        if (!rows()) return console.warn(`pm.${name === 'collection' ? 'collectionVariables' : name}.set("${k}") ignored: ${name === 'collection' ? 'the request is not saved in a collection' : 'no environment is selected'}.`);
         const s = v == null ? '' : typeof v === 'string' ? v : fmt(v);
         const r = rows().find(x => x.k === k);
         if (r) Object.assign(r, { v: s, on: true }); else rows().push({ on: true, k, v: s });

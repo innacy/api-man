@@ -10,11 +10,11 @@ const TABS_KEY = 'apiperf-send-tabs', PREFS_KEY = 'apiperf-send-prefs', OLD_DRAF
 const RESP_KEY = 'apiperf-resp-', RESP_KEEP_MAX = 1 << 20; // each tab's last response is kept across reloads up to 1 MB
 const blank = () => ({ on: true, k: '', v: '', d: '' });
 // The fields that make up a request; what Save stores and what "unsaved" compares.
-const FORM_KEYS = ['method', 'url', 'params', 'headers', 'auth', 'bodyMode', 'body', 'form', 'follow', 'insecure', 'timeout', 'noCookies'];
+const FORM_KEYS = ['method', 'url', 'params', 'headers', 'auth', 'bodyMode', 'body', 'form', 'follow', 'insecure', 'timeout', 'noCookies', 'preScript', 'postScript'];
 const newTab = (extra = {}) => ({
   tid: Math.random().toString(36).slice(2),
   method: 'GET', url: '', params: [], headers: [], auth: { type: 'none' }, bodyMode: 'none', body: '', form: [],
-  follow: false, insecure: false, timeout: 30, noCookies: false,
+  follow: false, insecure: false, timeout: 30, noCookies: false, preScript: '', postScript: '',
   reqTab: 'params', resTab: 'body', view: 'pretty', fmt: 'auto', bulk: {},
   savedId: null, name: '', collectionId: null, folderId: null, snapshot: '', ...extra,
 });
@@ -148,12 +148,12 @@ const stripComments = (s) => s.split('\n').filter(l => !isCommentLine(l)).join('
 const contentTypes = { json: 'application/json', xml: 'application/xml', text: 'text/plain', form: 'application/x-www-form-urlencoded' };
 // buildRequest turns the form into a /api/send body with {{variables}}
 // resolved; unresolved names are added to missing.
-function buildRequest(missing = new Set()) {
-  const vars = activeVars(), sub = (s) => subst(s ?? '', vars, missing);
-  let url = sub(S.url.trim());
-  const headers = S.headers.filter(r => r.on && r.k.trim()).map(r => [sub(r.k.trim()), sub(r.v)]);
+function buildRequest(missing = new Set(), t = S, local = {}) { // t: pre-request scripts send an edited copy of the tab
+  const vars = { ...activeVars(), ...local }, sub = (s) => subst(s ?? '', vars, missing);
+  let url = sub(t.url.trim());
+  const headers = t.headers.filter(r => r.on && r.k.trim()).map(r => [sub(r.k.trim()), sub(r.v)]);
   const has = (n) => headers.some(([k]) => k.toLowerCase() === n);
-  const a = Object.fromEntries(Object.entries(S.auth).map(([k, v]) => [k, k === 'type' || k === 'where' ? v : sub(v)]));
+  const a = Object.fromEntries(Object.entries(t.auth).map(([k, v]) => [k, k === 'type' || k === 'where' ? v : sub(v)]));
   if (a.type === 'bearer' && a.token && !has('authorization')) headers.push(['Authorization', 'Bearer ' + a.token]);
   if (a.type === 'basic' && !has('authorization'))
     headers.push(['Authorization', 'Basic ' + btoa(String.fromCharCode(...new TextEncoder().encode((a.user || '') + ':' + (a.pass || ''))))]);
@@ -162,12 +162,12 @@ function buildRequest(missing = new Set()) {
     else if (!has(a.key.toLowerCase())) headers.push([a.key, a.value || '']);
   }
   let body = '';
-  if (S.bodyMode === 'form') body = new URLSearchParams(S.form.filter(r => r.on && r.k).map(r => [sub(r.k), sub(r.v)])).toString();
-  else if (S.bodyMode === 'json') body = sub(stripComments(S.body));
-  else if (S.bodyMode !== 'none') body = sub(S.body);
-  if (S.bodyMode !== 'none' && !has('content-type')) headers.push(['Content-Type', contentTypes[S.bodyMode]]);
-  return { method: S.method.trim().toUpperCase() || 'GET', url, headers, body,
-    followRedirects: S.follow, insecure: S.insecure, timeoutMs: clampTimeout(S.timeout) * 1000, ...(S.noCookies ? { noCookies: true } : {}) };
+  if (t.bodyMode === 'form') body = new URLSearchParams(t.form.filter(r => r.on && r.k).map(r => [sub(r.k), sub(r.v)])).toString();
+  else if (t.bodyMode === 'json') body = sub(stripComments(t.body));
+  else if (t.bodyMode !== 'none') body = sub(t.body);
+  if (t.bodyMode !== 'none' && !has('content-type')) headers.push(['Content-Type', contentTypes[t.bodyMode]]);
+  return { method: t.method.trim().toUpperCase() || 'GET', url, headers, body,
+    followRedirects: t.follow, insecure: t.insecure, timeoutMs: clampTimeout(t.timeout) * 1000, ...(t.noCookies ? { noCookies: true } : {}) };
 }
 
 // Key/value tables work like Postman: one empty row always sits at the end;
@@ -212,7 +212,7 @@ const opt = (v, cur, label = v) => `<option value="${v}" ${v === cur ? 'selected
 
 function renderReqTabs() {
   const n = (rows) => rows.filter(r => r.on !== false && r.k).length;
-  const counts = { params: n(S.params), headers: n(S.headers), body: S.bodyMode !== 'none' ? '●' : 0, auth: S.auth.type !== 'none' ? '●' : 0 };
+  const counts = { params: n(S.params), headers: n(S.headers), body: S.bodyMode !== 'none' ? '●' : 0, auth: S.auth.type !== 'none' ? '●' : 0, scripts: S.preScript?.trim() || S.postScript?.trim() ? '●' : 0 };
   document.querySelectorAll('#sx-reqtabs button').forEach(b => {
     b.classList.toggle('on', b.dataset.v === S.reqTab);
     b.innerHTML = b.textContent.replace(/[\d●]+$/, '') + (counts[b.dataset.v] ? `<sup>${counts[b.dataset.v]}</sup>` : '');
@@ -236,6 +236,12 @@ function renderReqPane() {
      S.bodyMode === 'none' ? '<p class="muted" style="margin:0">This request has no body.</p>' :
      `<textarea class="sx-body" data-s="body" spellcheck="false">${esc(S.body)}</textarea>` +
      (S.bodyMode === 'json' ? '<p class="hint"><kbd>Ctrl</kbd> + <kbd>/</kbd> comments out lines; they are left out when sending. <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>F</kbd> beautifies.</p>' : ''));
+  else if (S.reqTab === 'scripts') {
+    const ph = P.scriptPhase === 'post' ? 'post' : 'pre';
+    pane.innerHTML = `<div class="sec"><span class="seg" id="sx-scriptph"><button data-v="pre" class="${ph === 'pre' ? 'on' : ''}">Pre-request</button><button data-v="post" class="${ph === 'post' ? 'on' : ''}">Post-response</button></span></div>
+      <textarea class="script" data-s="${ph}Script" spellcheck="false" placeholder="${ph === 'pre' ? "// Runs before the request is sent, e.g.\npm.request.headers.add({ key: 'X-Time', value: Date.now() });" : "// Runs after the response arrives, e.g.\npm.test('status is 200', () => pm.response.to.have.status(200));\npm.globals.set('token', pm.response.json().token);"}">${esc(S[ph + 'Script'] || '')}</textarea>
+      <p class="hint">Postman's <code>pm.*</code> API: variables, <code>pm.request</code>, <code>pm.response</code>, <code>pm.test</code> / <code>pm.expect</code>, <code>console.log</code>. Scripts run without network access; <code>pm.sendRequest</code> and <code>require</code> aren't available.</p>`;
+  }
   else if (S.reqTab === 'code') {
     const lang = CODE_LANGS[P.codeLang] ? P.codeLang : 'curl', missing = new Set();
     const code = CODE_LANGS[lang].gen(buildRequest(missing));
@@ -308,6 +314,8 @@ reqPane.addEventListener('click', (e) => {
     navigator.clipboard.writeText($('#sx-code').textContent).then(() => toast('Code copied to the clipboard.'));
     return;
   }
+  const ph = e.target.closest('#sx-scriptph button');
+  if (ph) { P.scriptPhase = ph.dataset.v; renderReqPane(); saveState(); return; }
   const mode = e.target.closest('#sx-bodymode button');
   if (mode) { S.bodyMode = mode.dataset.v; renderReqPane(); saveState(); return; }
   if (e.target.id === 'sx-beautify') beautify();
@@ -472,13 +480,83 @@ $('#sx-respane').addEventListener('keydown', (e) => {
 });
 $('#sx-respane').addEventListener('click', (e) => { if (e.target.closest('#sx-findx')) { findQ = null; renderRes(); } });
 
+// ---------- scripts ----------
+// scriptChain: the collection's script, each folder's (outermost first), then the request's.
+function scriptChain(t, phase) {
+  const out = [], col = lib.collections.find(c => c.id === t.collectionId), label = phase === 'pre' ? 'pre-request' : 'post-response';
+  if (col) out.push({ name: `Collection "${col.name}" ${label}`, code: metaOf(col)[phase] });
+  const chain = [];
+  for (let f = lib.folders.find(x => x.id === t.folderId); f; f = lib.folders.find(x => x.id === f.parentId)) chain.unshift(f);
+  chain.forEach(f => out.push({ name: `Folder "${f.name}" ${label}`, code: metaOf(f)[phase] }));
+  out.push({ name: `${label[0].toUpperCase() + label.slice(1)} script`, code: t[phase + 'Script'] });
+  return out.filter(x => x.code?.trim());
+}
+// runScripts in a fresh worker each time: no state leaks between runs, and a
+// runaway loop is killed after 5 s.
+function runInWorker(ctx) {
+  return new Promise((resolve) => {
+    const w = new Worker('scripts.js');
+    const done = (r) => { clearTimeout(timer); w.terminate(); resolve(r); };
+    const timer = setTimeout(() => done({ error: 'Script stopped after 5 s (endless loop?)' }), 5000);
+    w.onmessage = (e) => done(e.data);
+    w.onerror = (e) => { e.preventDefault(); done({ error: 'Script failed: ' + (e.message || 'syntax error') }); };
+    w.postMessage(ctx);
+  });
+}
+const scriptVars = (t) => {
+  const col = lib.collections.find(c => c.id === t.collectionId);
+  return { global: globals, collection: col ? metaOf(col).vars || [] : null, environment: envs.find(e => e.id === P.envId)?.vars || null };
+};
+// saveScriptVars stores whichever scopes a script changed.
+async function saveScriptVars(before, after, t) {
+  if (!after) return;
+  const same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  if (!same(before.global, after.global)) { globals = after.global; await api('PUT', '/api/globals', { vars: globals }); }
+  const col = lib.collections.find(c => c.id === t.collectionId);
+  if (col && !same(before.collection, after.collection)) { col.meta = { ...metaOf(col), vars: after.collection }; await api('PUT', `/api/collections/${col.id}/meta`, col.meta); }
+  const env = envs.find(e => e.id === P.envId);
+  if (env && !same(before.environment, after.environment)) { env.vars = after.environment; await api('PUT', `/api/environments/${env.id}`, { name: env.name, vars: env.vars }); }
+  renderURL();
+}
+// reviewScripts: an imported collection's scripts only run once you've agreed to.
+async function reviewScripts(t) {
+  const col = lib.collections.find(c => c.id === t.collectionId);
+  if (!metaOf(col).scriptsReview) return true;
+  const a = await ask({ title: 'Run this collection\'s scripts?', ok: 'Run scripts', alt: 'Send without scripts',
+    body: `"${col.name}" was imported with scripts. They run without network access, but they can read and change your variables. Check them under the request's Scripts tab and the collection's ⋯ → Scripts… first.` });
+  if (a === 'ok') { const { scriptsReview, ...m } = metaOf(col); col.meta = m; await api('PUT', `/api/collections/${col.id}/meta`, m).catch(e => toast(e.message, true)); return true; }
+  return a === 'alt' ? false : null;
+}
+
 async function sendNow() {
   const btn = $('#sx-send');
   if (btn.disabled) return;
   if (P.resHidden) toggleRes(); // a result you can't see is no result
   $('#sx-err').textContent = '';
   const tab = S;
-  const missing = new Set(), req = buildRequest(missing);
+  let pre = scriptChain(tab, 'pre'), post = scriptChain(tab, 'post');
+  if (pre.length || post.length) {
+    const ok = await reviewScripts(tab);
+    if (ok === null) return;
+    if (!ok) pre = post = [];
+  }
+  const scr = { tests: [], logs: [], error: '' };
+  let t = tab, local = {};
+  if (pre.length) {
+    const before = scriptVars(tab);
+    const r = await runInWorker({ scripts: pre, vars: before, local, info: { requestName: tabTitle(tab), eventName: 'prerequest' },
+      request: { method: tab.method, url: tab.url, headers: tab.headers.filter(h => h.on && h.k.trim()).map(h => [h.k, h.v]), body: tab.body } });
+    scr.logs.push(...(r.logs || [])); scr.tests.push(...(r.tests || []));
+    if (r.error) { $('#sx-err').textContent = `Not sent: ${r.error}`; return; }
+    await saveScriptVars(before, r.vars, tab).catch(e => toast(e.message, true));
+    local = r.local;
+    if (r.requestChanged) {
+      t = { ...structuredClone(tab), method: r.request.method, url: r.request.url, body: r.request.body,
+        headers: r.request.headers.map(([k, v]) => ({ on: true, k, v, d: '' })) };
+      if (t.bodyMode === 'none' && t.body) t.bodyMode = 'text';
+    }
+  }
+  const missing = new Set(), req = buildRequest(missing, t, local);
   const urlVars = [...new Set([...req.url.matchAll(/\{\{\s*([^{}]+?)\s*\}\}/g)].map(m => `{{${m[1]}}}`))];
   if (urlVars.length) {
     $('#sx-err').textContent = `The URL uses ${urlVars.join(', ')}, which ${P.envId ? "isn't set in the active environment" : 'needs an environment (none selected)'}.`;
@@ -489,6 +567,14 @@ async function sendNow() {
     const r = await fetch('/api/send', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(req) });
     const j = await r.json();
     if (!r.ok) throw new Error(j.error);
+    if (post.length && !j.error) {
+      const before = scriptVars(tab), out = respFrom(j, req);
+      const sr = await runInWorker({ scripts: post, vars: before, local, info: { requestName: tabTitle(tab), eventName: 'test' }, request: req,
+        response: { code: j.status, status: j.statusText, timeMs: j.timeMs, body: out.text, headers: Object.entries(j.header || {}).flatMap(([k, vs]) => vs.map(v => [k, v])) } });
+      scr.logs.push(...(sr.logs || [])); scr.tests.push(...(sr.tests || [])); scr.error = sr.error || '';
+      await saveScriptVars(before, sr.vars, tab).catch(e => toast(e.message, true));
+    }
+    if (pre.length || post.length) j.scripts = scr;
     resp[tab.tid] = respFrom(j, req);
     keepResp(tab.tid, j, req);
     tab.fmt = 'auto';
@@ -604,6 +690,7 @@ function renderRes() {
   document.querySelectorAll('#sx-restabs > button').forEach(b => {
     b.classList.toggle('on', b.dataset.v === S.resTab);
     if (b.dataset.v === 'headers') b.innerHTML = 'Headers' + (res?.header ? `<sup>${Object.keys(res.header).length}</sup>` : '');
+    if (b.dataset.v === 'tests') { const t = res?.scripts?.tests || []; b.innerHTML = 'Tests' + (t.length ? `<sup class="${t.every(x => x.pass) ? '' : 'bad'}">${t.filter(x => x.pass).length}/${t.length}</sup>` : res?.scripts?.error ? '<sup class="bad">!</sup>' : ''); }
   });
   if (blobURL) { URL.revokeObjectURL(blobURL); blobURL = null; }
   if (!res) {
@@ -616,6 +703,13 @@ function renderRes() {
     ? `<b class="rs s0">Error</b><span>${ms(res.timeMs)}</span>`
     : (S.resTab === 'body' && !isBinary() ? `<select id="sx-fmt" aria-label="Format">${opt('auto', S.fmt, '{ } ' + detectFmt().toUpperCase())}${['json', 'xml', 'html', 'text'].map(f => opt(f, S.fmt, f.toUpperCase())).join('')}</select>` : '') +
       `<b class="rs s${String(s).charAt(0)}">${s} ${esc(res.statusText)}</b><b>${ms(res.timeMs)}</b><b title="${res.truncated ? 'Truncated' : ''}">${fmtBytes(res.size)}</b>`;
+  if (S.resTab === 'tests') {
+    const sc = res.scripts || {}, t = sc.tests || [];
+    pane.innerHTML = (sc.error ? `<p class="bad">Script error: ${esc(sc.error)}</p>` : '') +
+      (t.length ? t.map(x => `<div class="tres"><b class="${x.pass ? 'good' : 'bad'}">${x.pass ? 'PASS' : 'FAIL'}</b><span>${esc(x.name)}${x.error ? ` <small>${esc(x.error)}</small>` : ''}</span></div>`).join('')
+        : '<p class="muted">No tests. Add <code>pm.test(…)</code> in the request\'s Scripts → Post-response.</p>');
+    return;
+  }
   if (S.resTab === 'timing') {
     const req = sent || {};
     pane.innerHTML = `<div class="tl"><h4>Request</h4><div class="line"><b class="m-${esc(req.method || '')}">${esc(req.method || '')}</b> ${esc(req.url || '')}</div>
@@ -623,6 +717,7 @@ function renderRes() {
       ${req.body ? `<h4>Request body</h4><pre class="code boxed wrap">${esc(req.body.length > 5000 ? req.body.slice(0, 5000) + '…' : req.body)}</pre>` : ''}
       <h4>Response</h4><div class="line">${res.error ? `<span class="bad">${esc(res.error)}</span>` : `${res.status} ${esc(res.statusText)} · ${esc(res.proto || '')}${res.tls ? ' · ' + esc(res.tls) : ''}${res.phases?.remote ? ' · ' + esc(res.phases.remote) : ''}`}</div>
       ${res.redirects?.length ? `<h4>Redirects</h4><div class="line">${res.redirects.map(esc).join(' → ')}</div>` : ''}
+      ${res.scripts?.logs?.length ? `<h4>Console</h4>${res.scripts.logs.map(l => `<pre class="conlog ${esc(l.level)}">${esc(l.text)}</pre>`).join('')}` : ''}
       <h4>Timing</h4>${res.phases ? probeTimingHTML({ cold: res.phases, proto: res.proto }) : '<p class="muted">No timing recorded.</p>'}</div>`;
     return;
   }
@@ -1047,10 +1142,10 @@ async function exportCollection(cid) {
     const reqs = lib.requests.filter(r => r.collectionId === cid);
     const full = new Map((await Promise.all(reqs.map(r => api('GET', `/api/requests/${r.id}`)))).map(r => [r.id, r]));
     const node = (parent) => ({
-      folders: lib.folders.filter(f => f.collectionId === cid && f.parentId === parent).map(f => ({ name: f.name, ...node(f.id) })),
+      folders: lib.folders.filter(f => f.collectionId === cid && f.parentId === parent).map(f => ({ name: f.name, meta: metaOf(f), ...node(f.id) })),
       requests: reqs.filter(r => (r.folderId ?? null) === parent).map(r => ({ name: r.name, data: full.get(r.id).data })),
     });
-    const blob = new Blob([JSON.stringify(toPostman({ name: col.name, vars: metaOf(col).vars, ...node(null) }), null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(toPostman({ name: col.name, vars: metaOf(col).vars, meta: metaOf(col), ...node(null) }), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = col.name.replace(/[^\w.-]+/g, '_') + '.postman_collection.json';
@@ -1076,6 +1171,7 @@ function itemMenu(x, y, kind, id) {
     { label: 'New request', run: newReqHere },
     { label: 'New folder', run: () => kind === 'c' ? newFolder(id, null) : newFolder(folder.collectionId, id) },
     { label: 'Rename', run: () => renameItem(kind, id), key: 'F2' },
+    { label: 'Scripts…', run: () => editScripts(kind, id) },
     ...(kind === 'c' ? [{ label: 'Variables…', run: () => openColVars(id) }, { label: 'Export as Postman collection…', run: () => exportCollection(id) }] : []),
     '-', { label: 'Delete', danger: true, run: () => deleteItem(kind, id) },
   ];
@@ -1363,6 +1459,17 @@ function openEnvDialog(id) {
   renderEnvDialog();
   if (!$('#sx-envdlg').open) $('#sx-envdlg').showModal();
 }
+// editScripts edits a collection's or folder's pre-request/post-response scripts.
+async function editScripts(kind, id) {
+  const item = kind === 'c' ? lib.collections.find(c => c.id === id) : lib.folders.find(f => f.id === id), m = metaOf(item), d = $('#sx-scrdlg');
+  $('#sx-scrtitle').textContent = `Scripts · ${item.name}`;
+  $('#sx-scrpre').value = m.pre || ''; $('#sx-scrpost').value = m.post || '';
+  d.returnValue = ''; d.showModal();
+  await new Promise(r => d.addEventListener('close', r, { once: true }));
+  if (d.returnValue !== 'ok') return;
+  const meta = { ...m, pre: $('#sx-scrpre').value, post: $('#sx-scrpost').value };
+  try { await api('PUT', `/api/${kind === 'c' ? 'collections' : 'folders'}/${id}/meta`, meta); item.meta = meta; toast('Scripts saved.'); } catch (e) { toast(e.message, true); }
+}
 function openColVars(cid) {
   const c = lib.collections.find(x => x.id === cid);
   E = { id: cid, scope: 'col', name: c.name, vars: (metaOf(c).vars || []).map(v => ({ ...v })) };
@@ -1446,11 +1553,12 @@ $('#sx-importfile').onchange = async (e) => {
       toast(`Imported environment "${p.name}" (${p.vars.length} variable${p.vars.length === 1 ? '' : 's'}) and made it active.`);
       return;
     }
-    await api('POST', '/api/import', { name: p.name, requests: p.requests, meta: p.meta });
+    await api('POST', '/api/import', { name: p.name, requests: p.requests, meta: p.meta, folderMeta: p.folderMeta });
     P.side = 'tree'; await loadLibrary();
     const nv = p.meta.vars?.length || 0;
     toast(`Imported "${p.name}": ${p.requests.length} request${p.requests.length === 1 ? '' : 's'}` +
       (nv ? `, plus ${nv} collection variable${nv === 1 ? '' : 's'} (collection ⋯ → Variables)` : '') + '.' +
+      (p.hasScripts ? ' It contains scripts: you\'ll be asked before they first run.' : '') +
       (p.warnings.length ? ' Note: ' + p.warnings.join(' ') : ''));
   } catch (e2) { toast('Import failed: ' + e2.message, true); }
 };

@@ -10,25 +10,42 @@ function fromPostman(json) {
     if (json && Array.isArray(json.requests)) throw new Error('This is a Postman v1 collection. Re-export it from Postman as Collection v2.1.');
     throw new Error('Not a Postman collection (v2.x) or environment export.');
   }
-  const warnings = new Set(), requests = [];
+  const warnings = new Set(), requests = [], folderMeta = {};
+  let hasScripts = false;
   const walk = (items, folder, auth, follow) => {
     for (const it of items) {
       const itAuth = it.auth && it.auth.type !== 'inherit' ? it.auth : auth;
       const itFollow = it.protocolProfileBehavior?.followRedirects ?? follow;
-      if ((it.event || []).some(e => e.script?.exec?.join?.('').trim())) warnings.add('Pre-request and test scripts were not imported.');
-      if (Array.isArray(it.item)) { walk(it.item, [...folder, it.name || 'Folder'], itAuth, itFollow); continue; }
-      const data = requestForm(it.request ?? '', itAuth, itFollow, warnings);
+      const ev = scriptsOf(it.event);
+      if (ev.pre || ev.post) hasScripts = true;
+      if (Array.isArray(it.item)) {
+        const path = [...folder, it.name || 'Folder'];
+        if (ev.pre || ev.post) folderMeta[path.map(p => '\0' + p).join('')] = ev; // same key the server builds
+        walk(it.item, path, itAuth, itFollow); continue;
+      }
+      const data = { ...requestForm(it.request ?? '', itAuth, itFollow, warnings), preScript: ev.pre, postScript: ev.post };
       requests.push({ name: it.name || data.url || 'Untitled request', folder, method: data.method, url: data.url, data });
     }
   };
   walk(json.item, [], json.auth, json.protocolProfileBehavior?.followRedirects ?? true);
   const vars = (json.variable || []).filter(v => v.key).map(v => ({ on: !v.disabled, k: v.key, v: String(v.value ?? '') }));
+  const ev = scriptsOf(json.event);
+  if (ev.pre || ev.post) hasScripts = true;
+  const meta = { ...(vars.length ? { vars } : {}), ...(ev.pre ? { pre: ev.pre } : {}), ...(ev.post ? { post: ev.post } : {}), ...(hasScripts ? { scriptsReview: true } : {}) };
   return {
     kind: 'collection', name: json.info.name || 'Imported collection', requests,
-    meta: vars.length ? { vars } : {}, // collection variables stay on the collection, as in Postman
+    meta, folderMeta, hasScripts, // collection variables stay on the collection, as in Postman
     warnings: [...warnings],
   };
 }
+
+// scriptsOf maps Postman events to { pre, post } script text.
+function scriptsOf(events) {
+  const code = (name) => (events || []).filter(e => e.listen === name).map(e => [].concat(e.script?.exec ?? '').join('\n')).join('\n').trim();
+  return { pre: code('prerequest'), post: code('test') };
+}
+const eventsOf = (pre, post) => [['prerequest', pre], ['test', post]].filter(([, c]) => c?.trim())
+  .map(([listen, c]) => ({ listen, script: { type: 'text/javascript', exec: c.split('\n') } }));
 
 function urlOf(u) {
   if (typeof u === 'string') return u;
@@ -104,11 +121,13 @@ function toPostman(tree) {
     if (query.length) request.url.query = query;
     if (d.bodyMode === 'form') request.body = { mode: 'urlencoded', urlencoded: kv(d.form) };
     else if (d.bodyMode && d.bodyMode !== 'none') request.body = { mode: 'raw', raw: d.body || '', options: { raw: { language: d.bodyMode } } };
-    return { name, request, protocolProfileBehavior: { followRedirects: !!d.follow } };
+    const event = eventsOf(d.preScript, d.postScript);
+    return { name, request, protocolProfileBehavior: { followRedirects: !!d.follow }, ...(event.length ? { event } : {}) };
   };
-  const items = (node) => [...(node.folders || []).map(f => ({ name: f.name, item: items(f) })), ...(node.requests || []).map(reqItem)];
+  const withEvents = (o, m = {}) => { const event = eventsOf(m.pre, m.post); return event.length ? { ...o, event } : o; };
+  const items = (node) => [...(node.folders || []).map(f => withEvents({ name: f.name, item: items(f) }, f.meta)), ...(node.requests || []).map(reqItem)];
   const variable = kv(tree.vars);
-  return { info: { name: tree.name, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: items(tree), ...(variable.length ? { variable } : {}) };
+  return withEvents({ info: { name: tree.name, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: items(tree), ...(variable.length ? { variable } : {}) }, tree.meta);
 }
 
 if (typeof module !== 'undefined') module.exports = { fromPostman, toPostman };

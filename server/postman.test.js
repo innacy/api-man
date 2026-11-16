@@ -55,8 +55,9 @@ test('collection: names, urls, headers, inherited auth, bodies, variables', () =
   assert.equal(list.follow, true); // Postman follows redirects by default
   assert.deepEqual(gql.auth, { type: 'none' });
   assert.deepEqual(JSON.parse(gql.body), { query: '{ me { id } }', variables: { a: 1 } });
-  assert.deepEqual(c.meta, { vars: [{ on: true, k: 'host', v: 'http://localhost:8080' }, { on: false, k: 'off', v: 'x' }] });
-  assert.equal(c.warnings.length, 4); // scripts, file field, form-data as urlencoded, oauth2
+  assert.deepEqual(c.meta, { vars: [{ on: true, k: 'host', v: 'http://localhost:8080' }, { on: false, k: 'off', v: 'x' }], scriptsReview: true });
+  assert.equal(c.requests.find(r => r.name === 'Create').data.postScript, 'pm.test("ok")');
+  assert.equal(c.warnings.length, 3); // file field, form-data as urlencoded, oauth2
 });
 
 test('invalid methods are not imported', () => {
@@ -99,4 +100,13 @@ test('globals file and collection variables round-trip', () => {
   const out = toPostman({ name: 'C', vars: [{ on: true, k: 'base', v: 'https://x' }], folders: [], requests: [] });
   assert.deepEqual(out.variable, [{ key: 'base', value: 'https://x' }]);
   assert.deepEqual(fromPostman(out).meta, { vars: [{ on: true, k: 'base', v: 'https://x' }] });
+});
+
+test('scripts round-trip at collection, folder and request level', () => {
+  const tree = { name: 'C', meta: { pre: 'console.log(1)' }, requests: [],
+    folders: [{ name: 'Auth', meta: { post: 'a\nb' }, folders: [], requests: [{ name: 'Login', data: { method: 'POST', url: 'u', postScript: "pm.globals.set('x', 1)" } }] }] };
+  const back = fromPostman(JSON.parse(JSON.stringify(toPostman(tree))));
+  assert.deepEqual(back.meta, { pre: 'console.log(1)', scriptsReview: true });
+  assert.deepEqual(back.folderMeta, { '\0Auth': { pre: '', post: 'a\nb' } });
+  assert.equal(back.requests[0].data.postScript, "pm.globals.set('x', 1)");
 });
