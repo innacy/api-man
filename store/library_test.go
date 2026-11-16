@@ -134,7 +134,7 @@ func TestLibraryEnvironments(t *testing.T) {
 func TestLibraryImportIsAllOrNothing(t *testing.T) {
 	l, _ := openLib(t)
 	data := json.RawMessage(`{}`)
-	cid, err := l.ImportCollection("Shop", []ImportRequest{
+	cid, err := l.ImportCollection("Shop", nil, nil, []ImportRequest{
 		{SavedRequest: SavedRequest{Name: "List", Method: "GET", URL: "u1", Data: data}, Folder: []string{"Items"}},
 		{SavedRequest: SavedRequest{Name: "Create", Method: "POST", URL: "u2", Data: data}, Folder: []string{"Items", "Admin"}},
 	})
@@ -150,7 +150,7 @@ func TestLibraryImportIsAllOrNothing(t *testing.T) {
 		t.Fatalf("folders = %+v", folders)
 	}
 	// One bad request (no data) rolls back the collection and the good request.
-	if _, err := l.ImportCollection("Broken", []ImportRequest{{SavedRequest: SavedRequest{Name: "ok", Method: "GET", URL: "u", Data: data}, Folder: []string{"F"}}, {SavedRequest: SavedRequest{Name: "bad", Method: "GET", URL: "u"}}}); err == nil {
+	if _, err := l.ImportCollection("Broken", nil, nil, []ImportRequest{{SavedRequest: SavedRequest{Name: "ok", Method: "GET", URL: "u", Data: data}, Folder: []string{"F"}}, {SavedRequest: SavedRequest{Name: "bad", Method: "GET", URL: "u"}}}); err == nil {
 		t.Fatal("want error for request without data")
 	}
 	if cols, folders, reqs, _ := l.Tree(); len(cols) != 1 || len(folders) != 2 || len(reqs) != 2 {
@@ -311,5 +311,39 @@ func TestLibraryHistoryKeepsNewest(t *testing.T) {
 	}
 	if h, _ := l.History(); len(h) != 0 {
 		t.Fatalf("after clear: %d entries", len(h))
+	}
+}
+
+func TestMetaAndGlobals(t *testing.T) {
+	l, path := openLib(t)
+	data := json.RawMessage(`{"url":"u"}`)
+	cid, err := l.ImportCollection("X360", json.RawMessage(`{"vars":[{"k":"base","v":"https://x"}],"pre":"1"}`),
+		map[string]json.RawMessage{"\x00Auth": json.RawMessage(`{"post":"2"}`)},
+		[]ImportRequest{{SavedRequest: SavedRequest{Name: "Login", Method: "POST", URL: "u", Data: data}, Folder: []string{"Auth"}}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	cols, folders, _, _ := l.Tree()
+	if string(cols[0].Meta) != `{"vars":[{"k":"base","v":"https://x"}],"pre":"1"}` || string(folders[0].Meta) != `{"post":"2"}` {
+		t.Fatalf("meta = %s / %s", cols[0].Meta, folders[0].Meta)
+	}
+	if err := l.SetMeta("collections", cid, json.RawMessage(`{"vars":[]}`)); err != nil {
+		t.Fatal(err)
+	}
+	if err := l.SetMeta("folders", 999, json.RawMessage(`{}`)); err == nil {
+		t.Fatal("missing folder accepted")
+	}
+	if g, _ := l.Globals(); string(g) != "[]" {
+		t.Fatalf("empty globals = %s", g)
+	}
+	l.SetGlobals(json.RawMessage(`[{"k":"x360Cookie","v":"a=1"}]`))
+	l.Close()
+	l2, err := OpenLibrary(path) // survives reopen (and the meta migration runs idempotently)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer l2.Close()
+	if g, _ := l2.Globals(); string(g) != `[{"k":"x360Cookie","v":"a=1"}]` {
+		t.Fatalf("globals after reopen = %s", g)
 	}
 }

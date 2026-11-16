@@ -39,6 +39,10 @@ func (s *server) libraryRoutes(mux *http.ServeMux) {
 	mux.HandleFunc("PUT /api/environments/{id}", s.handleSaveEnvironment)
 	mux.HandleFunc("DELETE /api/environments/{id}", s.handleDeleteEnvironment)
 	mux.HandleFunc("POST /api/import", s.handleImport)
+	mux.HandleFunc("PUT /api/collections/{id}/meta", s.handleSetMeta("collections"))
+	mux.HandleFunc("PUT /api/folders/{id}/meta", s.handleSetMeta("folders"))
+	mux.HandleFunc("GET /api/globals", s.handleGlobals)
+	mux.HandleFunc("PUT /api/globals", s.handleSetGlobals)
 }
 
 func (s *server) handleEnvironments(w http.ResponseWriter, r *http.Request) {
@@ -110,9 +114,11 @@ func (s *server) handleDeleteEnvironment(w http.ResponseWriter, r *http.Request)
 // Postman files) and, optionally, its variables as an environment.
 func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		Name        string                `json:"name"`
-		Requests    []store.ImportRequest `json:"requests"`
-		Environment *store.Environment    `json:"environment"`
+		Name        string                     `json:"name"`
+		Meta        json.RawMessage            `json:"meta"`
+		FolderMeta  map[string]json.RawMessage `json:"folderMeta"` // "\x00a\x00b" folder path → meta
+		Requests    []store.ImportRequest      `json:"requests"`
+		Environment *store.Environment         `json:"environment"`
 	}
 	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, 50<<20)).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "invalid JSON body: "+err.Error())
@@ -144,7 +150,13 @@ func (s *server) handleImport(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	cid, err := s.lib.ImportCollection(name, req.Requests)
+	for _, m := range append([]json.RawMessage{req.Meta}, mapValues(req.FolderMeta)...) {
+		if len(m) > 0 && m[0] != '{' {
+			writeError(w, http.StatusBadRequest, "meta must be a JSON object")
+			return
+		}
+	}
+	cid, err := s.lib.ImportCollection(name, req.Meta, req.FolderMeta, req.Requests)
 	if err != nil {
 		writeStoreErr(w, "import", err)
 		return
@@ -185,6 +197,58 @@ func writeStoreErr(w http.ResponseWriter, what string, err error) {
 	}
 	log.Printf("server: %s: %v", what, err)
 	writeError(w, http.StatusInternalServerError, "failed to update library")
+}
+
+func mapValues(m map[string]json.RawMessage) (out []json.RawMessage) {
+	for _, v := range m {
+		out = append(out, v)
+	}
+	return out
+}
+
+// handleSetMeta stores a collection's or folder's variables and scripts.
+func (s *server) handleSetMeta(kind string) http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		id, ok := pathInt64(r, "id")
+		if !ok {
+			writeError(w, http.StatusBadRequest, "invalid id")
+			return
+		}
+		var meta json.RawMessage
+		if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLibraryBody)).Decode(&meta); err != nil || len(meta) == 0 || meta[0] != '{' {
+			writeError(w, http.StatusBadRequest, "body must be a JSON object")
+			return
+		}
+		if err := s.lib.SetMeta(kind, id, meta); err != nil {
+			writeStoreErr(w, kind, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+	}
+}
+
+func (s *server) handleGlobals(w http.ResponseWriter, r *http.Request) {
+	vars, err := s.lib.Globals()
+	if err != nil {
+		writeStoreErr(w, "globals", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"vars": vars})
+}
+
+func (s *server) handleSetGlobals(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		Vars json.RawMessage `json:"vars"`
+	}
+	if err := json.NewDecoder(http.MaxBytesReader(w, r.Body, maxLibraryBody)).Decode(&req); err != nil || len(req.Vars) == 0 || req.Vars[0] != '[' {
+		writeError(w, http.StatusBadRequest, "vars must be a JSON list")
+		return
+	}
+	if err := s.lib.SetGlobals(req.Vars); err != nil {
+		writeStoreErr(w, "globals", err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 // cleanName trims a user-entered name and checks it fits.

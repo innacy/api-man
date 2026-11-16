@@ -55,7 +55,7 @@ test('collection: names, urls, headers, inherited auth, bodies, variables', () =
   assert.equal(list.follow, true); // Postman follows redirects by default
   assert.deepEqual(gql.auth, { type: 'none' });
   assert.deepEqual(JSON.parse(gql.body), { query: '{ me { id } }', variables: { a: 1 } });
-  assert.deepEqual(c.environment, { name: 'Shop variables', vars: [{ on: true, k: 'host', v: 'http://localhost:8080' }, { on: false, k: 'off', v: 'x' }] });
+  assert.deepEqual(c.meta, { vars: [{ on: true, k: 'host', v: 'http://localhost:8080' }, { on: false, k: 'off', v: 'x' }] });
   assert.equal(c.warnings.length, 4); // scripts, file field, form-data as urlencoded, oauth2
 });
 
@@ -91,4 +91,12 @@ test('export then import gives the same requests back', () => {
   assert.equal(post.bodyMode, 'json'); assert.equal(post.body, '{"a":1}'); assert.equal(post.follow, true);
   assert.deepEqual(form.auth, { type: 'basic', user: 'u', pass: 'p' });
   assert.equal(form.bodyMode, 'form'); assert.deepEqual(form.form, [{ on: true, k: 'a', v: 'b', d: '' }]);
+});
+
+test('globals file and collection variables round-trip', () => {
+  const g = fromPostman({ name: 'My Workspace Globals', values: [{ key: 'x360Cookie', value: 'a=1', enabled: true }], _postman_variable_scope: 'globals' });
+  assert.equal(g.kind, 'globals');
+  const out = toPostman({ name: 'C', vars: [{ on: true, k: 'base', v: 'https://x' }], folders: [], requests: [] });
+  assert.deepEqual(out.variable, [{ key: 'base', value: 'https://x' }]);
+  assert.deepEqual(fromPostman(out).meta, { vars: [{ on: true, k: 'base', v: 'https://x' }] });
 });

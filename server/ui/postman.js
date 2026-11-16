@@ -4,7 +4,7 @@
 
 function fromPostman(json) {
   if (json && Array.isArray(json.values) && typeof json.name === 'string') {
-    return { kind: 'environment', name: json.name, vars: json.values.map(v => ({ on: v.enabled !== false, k: v.key || '', v: String(v.value ?? '') })) };
+    return { kind: json._postman_variable_scope === 'globals' ? 'globals' : 'environment', name: json.name, vars: json.values.map(v => ({ on: v.enabled !== false, k: v.key || '', v: String(v.value ?? '') })) };
   }
   if (!json || !json.info || !Array.isArray(json.item)) {
     if (json && Array.isArray(json.requests)) throw new Error('This is a Postman v1 collection. Re-export it from Postman as Collection v2.1.');
@@ -25,7 +25,7 @@ function fromPostman(json) {
   const vars = (json.variable || []).filter(v => v.key).map(v => ({ on: !v.disabled, k: v.key, v: String(v.value ?? '') }));
   return {
     kind: 'collection', name: json.info.name || 'Imported collection', requests,
-    environment: vars.length ? { name: (json.info.name || 'Imported') + ' variables', vars } : null,
+    meta: vars.length ? { vars } : {}, // collection variables stay on the collection, as in Postman
     warnings: [...warnings],
   };
 }
@@ -107,7 +107,8 @@ function toPostman(tree) {
     return { name, request, protocolProfileBehavior: { followRedirects: !!d.follow } };
   };
   const items = (node) => [...(node.folders || []).map(f => ({ name: f.name, item: items(f) })), ...(node.requests || []).map(reqItem)];
-  return { info: { name: tree.name, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: items(tree) };
+  const variable = kv(tree.vars);
+  return { info: { name: tree.name, schema: 'https://schema.getpostman.com/json/collection/v2.1.0/collection.json' }, item: items(tree), ...(variable.length ? { variable } : {}) };
 }
 
 if (typeof module !== 'undefined') module.exports = { fromPostman, toPostman };

@@ -23,7 +23,7 @@ let tabs = [newTab()], active = 0, S = tabs[0];
 const P = { envId: null, collapsed: {}, codeLang: 'curl', wrap: false, split: .5, side: 'tree', sideHidden: false, resDown: false, sideW: 260, resHidden: false };
 const resp = {}; // tab id → { res, bytes, text, sent } (kept in memory only)
 let res = null, bytes = null, text = '', sent = null, blobURL = null;
-let envs = [], lib = { collections: [], folders: [], requests: [] }, hist = [];
+let envs = [], lib = { collections: [], folders: [], requests: [] }, hist = [], globals = [];
 
 const formOf = (t) => Object.fromEntries(FORM_KEYS.map(k => [k, t[k]]));
 const formData = () => formOf(S);
@@ -77,7 +77,21 @@ function subst(s, vars, missing) {
     return m;
   });
 }
-const activeVars = () => Object.fromEntries((envs.find(e => e.id === P.envId)?.vars || []).filter(v => v.on && v.k).map(v => [v.k, v.v]));
+// varScopes resolves every {{name}} the current tab can see, in Postman's
+// order: environment beats collection, collection beats global.
+const metaOf = (x) => x?.meta || {};
+function varScopes() {
+  const out = {}, add = (rows, scope) => (rows || []).filter(v => v.on !== false && v.k).forEach(v => { out[v.k] = { v: v.v, scope }; });
+  add(globals, 'Global');
+  const col = lib.collections.find(c => c.id === S.collectionId);
+  add(metaOf(col).vars, 'Collection ' + (col?.name || ''));
+  add(envs.find(e => e.id === P.envId)?.vars, 'Environment ' + (envs.find(e => e.id === P.envId)?.name || ''));
+  return out;
+}
+const activeVars = () => Object.fromEntries(Object.entries(varScopes()).map(([k, x]) => [k, x.v]));
+async function loadGlobals() {
+  try { globals = (await api('GET', '/api/globals')).vars; renderURL(); } catch (e) { toast(e.message, true); }
+}
 
 // prettyJSON re-indents JSON from its tokens instead of JSON.parse +
 // stringify, so big integers and number formatting survive untouched.
@@ -227,7 +241,7 @@ function renderReqPane() {
     const code = CODE_LANGS[lang].gen(buildRequest(missing));
     pane.innerHTML = `<div class="sx-row" style="margin-top:6px"><select data-p="codeLang" aria-label="Language">${Object.entries(CODE_LANGS).map(([id, l]) => opt(id, lang, l.label)).join('')}</select>
         <button class="ghost" id="sx-codecopy">Copy</button>
-        ${missing.size ? `<span class="muted sx-codenote">Left as-is (${P.envId ? 'not in this environment' : 'no environment selected'}): ${esc([...missing].map(v => `{{${v}}}`).join(', '))}</span>` : ''}</div>
+        ${missing.size ? `<span class="muted sx-codenote">Left as-is (not defined in the environment, collection or globals): ${esc([...missing].map(v => `{{${v}}}`).join(', '))}</span>` : ''}</div>
       <pre class="code boxed" id="sx-code"></pre>`;
     $('#sx-code').textContent = code;
   }
@@ -376,6 +390,17 @@ function renderURL() {
     `<span class="var${Object.hasOwn(vars, n) ? '' : ' miss'}">${m}</span>`) + ' ';
   syncURLScroll();
 }
+// Hovering a {{variable}} in the URL box shows its value and where it comes from.
+$('#sx-url').addEventListener('mousemove', (e) => {
+  const sp = [...document.querySelectorAll('#sx-urlhl .var')].find(el => { // the overlay has pointer-events:none, so hit-test by box
+    const r = el.getBoundingClientRect(); return e.clientX >= r.left && e.clientX <= r.right && e.clientY >= r.top && e.clientY <= r.bottom;
+  });
+  if (!sp) return hideTip();
+  const name = sp.textContent.replace(/^\{\{\s*|\s*\}\}$/g, ''), x = varScopes()[name];
+  showTip(e, x ? `<b>${esc(name)}</b> = ${esc(String(x.v).length > 120 ? String(x.v).slice(0, 120) + '…' : x.v)}<br><span class="muted">from ${esc(x.scope)}</span>`
+    : `<b>${esc(name)}</b> isn't defined in the environment, collection or globals`);
+});
+$('#sx-url').addEventListener('mouseleave', hideTip);
 const syncURLScroll = () => { $('#sx-urlhl').firstChild.style.transform = `translateX(${-$('#sx-url').scrollLeft}px)`; };
 $('#sx-url').addEventListener('scroll', syncURLScroll);
 $('#sx-url').addEventListener('keyup', syncURLScroll);
@@ -470,7 +495,7 @@ async function sendNow() {
     if (tab === S) {
       ({ res, bytes, text, sent } = resp[tab.tid]);
       renderRes();
-      if (missing.size) $('#sx-err').textContent = `Sent with unresolved variables: ${[...missing].map(n => `{{${n}}}`).join(', ')}. Pick or edit an environment.`;
+      if (missing.size) $('#sx-err').textContent = `Sent with unresolved variables: ${[...missing].map(n => `{{${n}}}`).join(', ')}. Define them in an environment, the collection's variables or globals.`;
     }
   } catch (err) {
     if (tab === S) $('#sx-err').textContent = err.message;
@@ -1025,7 +1050,7 @@ async function exportCollection(cid) {
       folders: lib.folders.filter(f => f.collectionId === cid && f.parentId === parent).map(f => ({ name: f.name, ...node(f.id) })),
       requests: reqs.filter(r => (r.folderId ?? null) === parent).map(r => ({ name: r.name, data: full.get(r.id).data })),
     });
-    const blob = new Blob([JSON.stringify(toPostman({ name: col.name, ...node(null) }), null, 2)], { type: 'application/json' });
+    const blob = new Blob([JSON.stringify(toPostman({ name: col.name, vars: metaOf(col).vars, ...node(null) }), null, 2)], { type: 'application/json' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = col.name.replace(/[^\w.-]+/g, '_') + '.postman_collection.json';
@@ -1051,7 +1076,7 @@ function itemMenu(x, y, kind, id) {
     { label: 'New request', run: newReqHere },
     { label: 'New folder', run: () => kind === 'c' ? newFolder(id, null) : newFolder(folder.collectionId, id) },
     { label: 'Rename', run: () => renameItem(kind, id), key: 'F2' },
-    ...(kind === 'c' ? [{ label: 'Export as Postman collection…', run: () => exportCollection(id) }] : []),
+    ...(kind === 'c' ? [{ label: 'Variables…', run: () => openColVars(id) }, { label: 'Export as Postman collection…', run: () => exportCollection(id) }] : []),
     '-', { label: 'Delete', danger: true, run: () => deleteItem(kind, id) },
   ];
   menu(x, y, items);
@@ -1285,6 +1310,7 @@ function renderPalette() {
     { html: '+ New request', sub: 'action', text: 'new request tab', run: () => newRequest() },
     { html: '+ New collection', sub: 'action', text: 'new collection', run: newCollection },
     { html: 'Manage environments', sub: 'action', text: 'environments variables manage', run: () => openEnvDialog(P.envId) },
+    { html: 'Global variables', sub: 'action', text: 'globals global variables', run: () => openEnvDialog('g') },
     { html: 'Import from Postman', sub: 'action', text: 'import postman', run: () => $('#sx-importfile').click() },
     { html: 'Load test the current request', sub: 'action', text: 'load test run', run: loadTest },
     { html: 'Past load tests', sub: 'action', text: 'runs history load tests past', run: () => go('#history') },
@@ -1329,17 +1355,32 @@ $('#sx-env').onchange = (e) => {
 
 // The dialog edits a copy (E) and writes it back only on Save.
 let E = null;
+// The same dialog edits environments, globals (id 'g') and one collection's variables (scope 'col').
 function openEnvDialog(id) {
   const src = envs.find(e => e.id === id) || envs[0];
-  E = src ? { id: src.id, name: src.name, vars: src.vars.map(v => ({ ...v })) } : { id: null, name: 'Local', vars: [] };
+  E = id === 'g' ? { id: 'g', scope: 'global', name: 'Globals', vars: globals.map(v => ({ ...v })) }
+    : src ? { id: src.id, name: src.name, vars: src.vars.map(v => ({ ...v })) } : { id: null, name: 'Local', vars: [] };
+  renderEnvDialog();
+  if (!$('#sx-envdlg').open) $('#sx-envdlg').showModal();
+}
+function openColVars(cid) {
+  const c = lib.collections.find(x => x.id === cid);
+  E = { id: cid, scope: 'col', name: c.name, vars: (metaOf(c).vars || []).map(v => ({ ...v })) };
   renderEnvDialog();
   if (!$('#sx-envdlg').open) $('#sx-envdlg').showModal();
 }
 function renderEnvDialog() {
-  $('#sx-envpick').innerHTML = envs.map(e => opt(String(e.id), String(E.id), esc(e.name))).join('') + (E.id ? '' : opt('', '', '(new environment)'));
+  const col = E.scope === 'col';
+  $('#sx-envtitle').textContent = col ? `Variables · ${E.name}` : 'Environments';
+  $('#sx-envpickrow').hidden = col;
+  $('#sx-envnamerow').hidden = !!E.scope;
+  $('#sx-envscope').textContent = col ? 'Used by every request in this collection. An environment variable with the same name wins.'
+    : E.scope ? 'Used by every request in every collection. Collection and environment variables with the same name win.' : '';
+  $('#sx-envpick').innerHTML = envs.map(e => opt(String(e.id), String(E.id), esc(e.name))).join('') + (E.id ? '' : opt('', '', '(new environment)'))
+    + `<option disabled>──────</option>` + opt('g', String(E.id), 'Globals (every collection)');
   $('#sx-envname').value = E.name;
   $('#sx-envvars').innerHTML = kvHTML('envvars', E.vars, 'Variable');
-  $('#sx-envdel').disabled = !E.id;
+  $('#sx-envdel').disabled = !E.id || !!E.scope;
   $('#sx-envmsg').textContent = '';
 }
 $('#sx-envname').oninput = (e) => { E.name = e.target.value; };
@@ -1352,11 +1393,18 @@ $('#sx-envvars').addEventListener('click', (e) => {
   E.vars.splice(+del.dataset.i, 1);
   renderEnvDialog();
 });
-$('#sx-envpick').onchange = (e) => openEnvDialog(+e.target.value);
+$('#sx-envpick').onchange = (e) => openEnvDialog(e.target.value === 'g' ? 'g' : +e.target.value);
 $('#sx-envnew').onclick = () => { E = { id: null, name: 'New environment', vars: [] }; renderEnvDialog(); $('#sx-envname').select(); };
 $('#sx-envclose').onclick = () => $('#sx-envdlg').close();
 $('#sx-envsave').onclick = async () => {
   try {
+    const vars = E.vars.filter(v => v.k);
+    if (E.scope) {
+      if (E.scope === 'global') { await api('PUT', '/api/globals', { vars }); await loadGlobals(); }
+      else { await api('PUT', `/api/collections/${E.id}/meta`, { ...metaOf(lib.collections.find(c => c.id === E.id)), vars }); await loadLibrary(); renderURL(); }
+      $('#sx-envmsg').className = 'muted'; $('#sx-envmsg').textContent = 'Saved.';
+      return;
+    }
     const body = { name: E.name, vars: E.vars.filter(v => v.k) };
     const r = await api(E.id ? 'PUT' : 'POST', E.id ? `/api/environments/${E.id}` : '/api/environments', body);
     if (!E.id) P.envId = r.id; // a new environment becomes the active one
@@ -1385,17 +1433,24 @@ $('#sx-importfile').onchange = async (e) => {
     let json;
     try { json = JSON.parse(await file.text()); } catch { throw new Error(`${file.name} is not valid JSON.`); }
     const p = fromPostman(json);
+    if (p.kind === 'globals') { // merged by name: imported values win
+      const byK = new Map(globals.map(v => [v.k, v]));
+      p.vars.forEach(v => byK.set(v.k, v));
+      await api('PUT', '/api/globals', { vars: [...byK.values()].filter(v => v.k) }); await loadGlobals();
+      toast(`Imported ${p.vars.length} global variable${p.vars.length === 1 ? '' : 's'}.`);
+      return;
+    }
     if (p.kind === 'environment') {
       const r = await api('POST', '/api/environments', { name: p.name, vars: p.vars });
       P.envId = r.id; await loadEnvs(); saveState();
       toast(`Imported environment "${p.name}" (${p.vars.length} variable${p.vars.length === 1 ? '' : 's'}) and made it active.`);
       return;
     }
-    const r = await api('POST', '/api/import', { name: p.name, requests: p.requests, environment: p.environment });
-    if (r.environmentId) { P.envId = r.environmentId; await loadEnvs(); saveState(); }
+    await api('POST', '/api/import', { name: p.name, requests: p.requests, meta: p.meta });
     P.side = 'tree'; await loadLibrary();
+    const nv = p.meta.vars?.length || 0;
     toast(`Imported "${p.name}": ${p.requests.length} request${p.requests.length === 1 ? '' : 's'}` +
-      (p.environment ? `, plus its variables as environment "${p.environment.name}" (now active)` : '') + '.' +
+      (nv ? `, plus ${nv} collection variable${nv === 1 ? '' : 's'} (collection ⋯ → Variables)` : '') + '.' +
       (p.warnings.length ? ' Note: ' + p.warnings.join(' ') : ''));
   } catch (e2) { toast('Import failed: ' + e2.message, true); }
 };
@@ -1431,4 +1486,4 @@ S = tabs[active];
 ({ res, bytes, text, sent } = resp[S.tid] || { res: null, bytes: null, text: '', sent: null });
 applySide(); applySplit();
 renderEditor();
-loadLibrary(); loadReqHistory(); loadEnvs();
+loadLibrary(); loadReqHistory(); loadEnvs(); loadGlobals();

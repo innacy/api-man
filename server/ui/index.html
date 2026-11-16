@@ -465,10 +465,11 @@
   </form>
 </dialog>
 <dialog id="sx-envdlg" class="wide sx">
-  <div class="dh">Environments</div>
+  <div class="dh" id="sx-envtitle">Environments</div>
   <div class="db">
-    <div class="sx-row" style="margin:0"><select id="sx-envpick" style="flex:1" aria-label="Environment to edit"></select><button class="ghost" id="sx-envnew">New</button><button class="ghost danger-text" id="sx-envdel">Delete</button></div>
-    <label>Name<input id="sx-envname" maxlength="200"></label>
+    <div class="sx-row" id="sx-envpickrow" style="margin:0"><select id="sx-envpick" style="flex:1" aria-label="Environment to edit"></select><button class="ghost" id="sx-envnew">New</button><button class="ghost danger-text" id="sx-envdel">Delete</button></div>
+    <label id="sx-envnamerow">Name<input id="sx-envname" maxlength="200"></label>
+    <p class="hint" id="sx-envscope" style="margin:0"></p>
     <div id="sx-envvars"></div>
     <p class="hint" style="margin:0">Use a variable anywhere in a request as <code>{{name}}</code>.</p>
   </div>

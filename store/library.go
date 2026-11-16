@@ -54,6 +54,10 @@ CREATE TABLE IF NOT EXISTS environments(
   name TEXT NOT NULL,
   vars TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS globals(
+  id INTEGER PRIMARY KEY CHECK(id = 1),
+  vars TEXT NOT NULL
+);
 CREATE TABLE IF NOT EXISTS history(
   id INTEGER PRIMARY KEY,
   at TEXT NOT NULL,
@@ -100,6 +104,19 @@ func OpenLibrary(path string) (*Library, error) {
 			return nil, err
 		}
 	}
+	// Collections and folders gained meta (variables and scripts, the UI's JSON).
+	for _, t := range []string{"collections", "folders"} {
+		if err := db.QueryRow(`SELECT count(*) FROM pragma_table_info('` + t + `') WHERE name='meta'`).Scan(&n); err != nil {
+			db.Close()
+			return nil, err
+		}
+		if n == 0 {
+			if _, err := db.Exec(`ALTER TABLE ` + t + ` ADD COLUMN meta TEXT NOT NULL DEFAULT '{}'`); err != nil {
+				db.Close()
+				return nil, err
+			}
+		}
+	}
 	return &Library{db: db}, nil
 }
 
@@ -108,16 +125,18 @@ func (l *Library) Close() error { return l.db.Close() }
 
 // Collection is a named group of saved requests.
 type Collection struct {
-	ID   int64  `json:"id"`
-	Name string `json:"name"`
+	ID   int64           `json:"id"`
+	Name string          `json:"name"`
+	Meta json.RawMessage `json:"meta,omitempty"` // {vars, pre, post}: the UI's JSON, stored as-is
 }
 
 // Folder groups requests inside a collection; folders can nest (ParentID).
 type Folder struct {
-	ID           int64  `json:"id"`
-	CollectionID int64  `json:"collectionId"`
-	ParentID     *int64 `json:"parentId"`
-	Name         string `json:"name"`
+	ID           int64           `json:"id"`
+	CollectionID int64           `json:"collectionId"`
+	ParentID     *int64          `json:"parentId"`
+	Name         string          `json:"name"`
+	Meta         json.RawMessage `json:"meta,omitempty"` // {pre, post} scripts
 }
 
 // SavedRequest is one saved request. Data is the Send tab's form state,
@@ -335,18 +354,22 @@ func (l *Library) DeleteFolder(id int64) error {
 // Tree lists every collection, folder and saved request (without Data), by name.
 func (l *Library) Tree() ([]Collection, []Folder, []SavedRequest, error) {
 	cols := []Collection{}
-	if err := l.each(`SELECT id, name FROM collections ORDER BY name COLLATE NOCASE, id`, func(sc func(...any) error) error {
+	if err := l.each(`SELECT id, name, meta FROM collections ORDER BY name COLLATE NOCASE, id`, func(sc func(...any) error) error {
 		var c Collection
-		err := sc(&c.ID, &c.Name)
+		var meta string
+		err := sc(&c.ID, &c.Name, &meta)
+		c.Meta = json.RawMessage(meta)
 		cols = append(cols, c)
 		return err
 	}); err != nil {
 		return nil, nil, nil, err
 	}
 	folders := []Folder{}
-	if err := l.each(`SELECT id, collection_id, parent_id, name FROM folders ORDER BY name COLLATE NOCASE, id`, func(sc func(...any) error) error {
+	if err := l.each(`SELECT id, collection_id, parent_id, name, meta FROM folders ORDER BY name COLLATE NOCASE, id`, func(sc func(...any) error) error {
 		var f Folder
-		err := sc(&f.ID, &f.CollectionID, &f.ParentID, &f.Name)
+		var meta string
+		err := sc(&f.ID, &f.CollectionID, &f.ParentID, &f.Name, &meta)
+		f.Meta = json.RawMessage(meta)
 		folders = append(folders, f)
 		return err
 	}); err != nil {
@@ -428,13 +451,17 @@ type ImportRequest struct {
 }
 
 // ImportCollection creates a collection holding reqs (and their folders), all or nothing.
-func (l *Library) ImportCollection(name string, reqs []ImportRequest) (int64, error) {
+// meta is the collection's meta; folderMeta maps a folder path ("\x00a\x00b") to its meta.
+func (l *Library) ImportCollection(name string, meta json.RawMessage, folderMeta map[string]json.RawMessage, reqs []ImportRequest) (int64, error) {
+	if len(meta) == 0 {
+		meta = json.RawMessage("{}")
+	}
 	tx, err := l.db.Begin()
 	if err != nil {
 		return 0, err
 	}
 	defer tx.Rollback() // no-op after Commit
-	res, err := tx.Exec(`INSERT INTO collections(name) VALUES(?)`, name)
+	res, err := tx.Exec(`INSERT INTO collections(name, meta) VALUES(?,?)`, name, string(meta))
 	if err != nil {
 		return 0, err
 	}
@@ -451,7 +478,11 @@ func (l *Library) ImportCollection(name string, reqs []ImportRequest) (int64, er
 			key += "\x00" + f
 			id, ok := folders[key]
 			if !ok {
-				res, err := tx.Exec(`INSERT INTO folders(collection_id, parent_id, name) VALUES(?,?,?)`, cid, parent, f)
+				fm := folderMeta[key]
+				if len(fm) == 0 {
+					fm = json.RawMessage("{}")
+				}
+				res, err := tx.Exec(`INSERT INTO folders(collection_id, parent_id, name, meta) VALUES(?,?,?,?)`, cid, parent, f, string(fm))
 				if err != nil {
 					return 0, err
 				}
@@ -505,6 +536,30 @@ func (l *Library) GetHistory(id int64) (HistoryEntry, error) {
 		Scan(&h.At, &h.Method, &h.URL, &h.Status, &h.TimeMs, &h.Size, &h.Error, &data)
 	h.Data = json.RawMessage(data)
 	return h, err
+}
+
+// SetMeta replaces a collection's or folder's meta (kind "collections" or "folders").
+func (l *Library) SetMeta(kind string, id int64, meta json.RawMessage) error {
+	if kind != "collections" && kind != "folders" {
+		return errors.New("bad kind")
+	}
+	return affected(l.db.Exec(`UPDATE `+kind+` SET meta=? WHERE id=?`, string(meta), id))
+}
+
+// Globals returns the workspace-wide variables (the UI's row list).
+func (l *Library) Globals() (json.RawMessage, error) {
+	vars := "[]"
+	err := l.db.QueryRow(`SELECT vars FROM globals WHERE id=1`).Scan(&vars)
+	if errors.Is(err, sql.ErrNoRows) {
+		err = nil
+	}
+	return json.RawMessage(vars), err
+}
+
+// SetGlobals replaces the workspace-wide variables.
+func (l *Library) SetGlobals(vars json.RawMessage) error {
+	_, err := l.db.Exec(`INSERT INTO globals(id, vars) VALUES(1, ?) ON CONFLICT(id) DO UPDATE SET vars=excluded.vars`, string(vars))
+	return err
 }
 
 // ClearHistory deletes all history.
