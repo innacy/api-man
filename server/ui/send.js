@@ -154,12 +154,14 @@ function buildRequest(missing = new Set(), t = S, local = {}) { // t: pre-reques
   const headers = t.headers.filter(r => r.on && r.k.trim()).map(r => [sub(r.k.trim()), sub(r.v)]);
   const has = (n) => headers.some(([k]) => k.toLowerCase() === n);
   const a = Object.fromEntries(Object.entries(t.auth).map(([k, v]) => [k, k === 'type' || k === 'where' ? v : sub(v)]));
-  if (a.type === 'bearer' && a.token && !has('authorization')) headers.push(['Authorization', 'Bearer ' + a.token]);
-  if (a.type === 'basic' && !has('authorization'))
-    headers.push(['Authorization', 'Basic ' + btoa(String.fromCharCode(...new TextEncoder().encode((a.user || '') + ':' + (a.pass || ''))))]);
+  // The Auth tab wins over a same-named header row: drop the row, then add ours.
+  const put = (k, v) => { for (let i = headers.length; i--;) if (headers[i][0].toLowerCase() === k.toLowerCase()) headers.splice(i, 1); headers.push([k, v]); };
+  if (a.type === 'bearer' && a.token) put('Authorization', 'Bearer ' + a.token);
+  if (a.type === 'basic')
+    put('Authorization', 'Basic ' + btoa(String.fromCharCode(...new TextEncoder().encode((a.user || '') + ':' + (a.pass || '')))));
   if (a.type === 'apikey' && a.key) {
     if (a.where === 'query') url = urlWithParams(url, [...paramsFromURL(url), { k: a.key, v: a.value || '' }]);
-    else if (!has(a.key.toLowerCase())) headers.push([a.key, a.value || '']);
+    else put(a.key, a.value || '');
   }
   let body = '';
   if (t.bodyMode === 'form') body = new URLSearchParams(t.form.filter(r => r.on && r.k).map(r => [sub(r.k), sub(r.v)])).toString();
@@ -224,10 +226,10 @@ function renderReqPane() {
   if (S.reqTab === 'params') pane.innerHTML = kvSection('params', 'Query', 'Name') +
     '<p class="hint">Enabled params are written into the URL; untick one to leave it out without deleting it.</p>';
   else if (S.reqTab === 'headers') pane.innerHTML = kvSection('headers', 'Headers', 'Name') +
-    '<p class="hint">Content-Type and Authorization are added from the Body and Auth tabs unless set here.</p>';
+    '<p class="hint">Content-Type is added from the Body tab unless set here; the Auth tab overrides an Authorization header set here.</p>';
   else if (S.reqTab === 'auth') pane.innerHTML = `<div class="sec">Auth</div><div class="sx-row"><select data-s="auth.type">${opt('none', a.type, 'No auth')}${opt('bearer', a.type, 'Bearer token')}${opt('basic', a.type, 'Basic auth')}${opt('apikey', a.type, 'API key')}</select></div>` +
     (a.type === 'bearer' ? `<div class="sx-row"><input data-s="auth.token" value="${esc(a.token || '')}" placeholder="Token" style="flex:1" spellcheck="false"></div>` :
-     a.type === 'basic' ? `<div class="sx-row"><input data-s="auth.user" value="${esc(a.user || '')}" placeholder="Username"><input data-s="auth.pass" type="password" value="${esc(a.pass || '')}" placeholder="Password"></div>` :
+     a.type === 'basic' ? `<div class="sx-row"><input data-s="auth.user" value="${esc(a.user || '')}" placeholder="Username"><input data-s="auth.pass" type="password" value="${esc(a.pass || '')}" placeholder="Password"><button class="link" id="sx-peek" title="Show/hide password">Show</button></div>` :
      a.type === 'apikey' ? `<div class="sx-row"><input data-s="auth.key" value="${esc(a.key || '')}" placeholder="Key name (e.g. X-API-Key)"><input data-s="auth.value" value="${esc(a.value || '')}" placeholder="Value" style="flex:1"><select data-s="auth.where">${opt('header', a.where, 'in header')}${opt('query', a.where, 'in query')}</select></div>` : '');
   else if (S.reqTab === 'body') pane.innerHTML = `<div class="sec"><span class="seg" id="sx-bodymode">${['none', 'json', 'text', 'xml', 'form'].map(m =>
       `<button data-v="${m}" class="${S.bodyMode === m ? 'on' : ''}">${{ none: 'None', json: 'JSON', text: 'Text', xml: 'XML', form: 'Form' }[m]}</button>`).join('')}</span>
@@ -1383,6 +1385,11 @@ $('#sx-cookieclear').onclick = async () => {
   openCookies();
 };
 $('#sx-reqpane').addEventListener('click', (e) => { if (e.target.closest('#sx-cookies2')) { e.preventDefault(); openCookies(); } });
+$('#sx-reqpane').addEventListener('click', (e) => {
+  const b = e.target.closest('#sx-peek'); if (!b) return;
+  const i = b.previousElementSibling, show = i.type === 'password';
+  i.type = show ? 'text' : 'password'; b.textContent = show ? 'Hide' : 'Show';
+});
 // Load test: hand the current request to the New run page as a curl.
 function loadTest() {
   const req = buildRequest();
@@ -1614,3 +1621,4 @@ S = tabs[active];
 applySide(); applySplit();
 renderEditor();
 loadLibrary(); loadReqHistory(); loadEnvs(); loadGlobals();
+

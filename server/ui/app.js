@@ -33,7 +33,9 @@ const darkMQ = matchMedia('(prefers-color-scheme: dark)');
 let themeMode = 'dark';
 function applyTheme(mode) {
   themeMode = mode;
-  document.documentElement.classList.toggle('dark', mode === 'dark' || (mode === 'system' && darkMQ.matches));
+  document.documentElement.classList.toggle('dark', mode === 'dark' || mode === 'nord' || mode === 'dracula' || (mode === 'system' && darkMQ.matches));
+  document.documentElement.classList.toggle('nord', mode === 'nord');
+  document.documentElement.classList.toggle('dracula', mode === 'dracula');
   document.querySelectorAll('#theme-toggle button').forEach(b =>
     b.classList.toggle('active', b.dataset.theme === mode));
   try { localStorage.setItem('apiperf-theme', mode); } catch {}
@@ -838,3 +840,84 @@ getJSON('/api/update').then((u) => {
   b.classList.remove('hidden');
   b.onclick = () => fetch('/api/update/open', { method: 'POST' });
 });
+
+// Double-click selects a run of letters/digits/_ only, so "api.example.com"
+// picks one label. Browsers' word rules treat "a.b" as one word in inputs and
+// plain text. On the second mousedown the caret still sits where the first
+// click put it; we expand from there and skip the native word selection.
+const isWordCh = (c) => /[\p{L}\p{N}_]/u.test(c || '');
+function wordAt(text, i) {
+  if (!isWordCh(text[i]) && !isWordCh(text[i - 1])) return null; // on punctuation: native
+  let a = i, b = i;
+  while (a > 0 && isWordCh(text[a - 1])) a--;
+  while (b < text.length && isWordCh(text[b])) b++;
+  return [a, b];
+}
+document.addEventListener('mousedown', (e) => {
+  if (e.detail !== 2 || e.button !== 0) return;
+  const el = e.target;
+  if (el.matches?.('input, textarea')) {
+    if (el.selectionStart == null || el.selectionStart !== el.selectionEnd) return;
+    const r = wordAt(el.value, el.selectionStart); if (!r) return;
+    e.preventDefault(); el.setSelectionRange(r[0], r[1]);
+    return;
+  }
+  const sel = getSelection(), n = sel.anchorNode;
+  if (!sel.isCollapsed || n?.nodeType !== Node.TEXT_NODE) return;
+  const r = wordAt(n.data, sel.anchorOffset); if (!r) return;
+  e.preventDefault(); sel.setBaseAndExtent(n, r[0], n, r[1]);
+});
+
+// Themed dropdown for every <select> (incl. ones rendered later): the native
+// list is drawn by GTK and ignores app styles. The <select> stays the source of
+// truth — picking sets .value and fires input/change, so existing handlers work.
+(() => {
+  let pop = null, sel = null;
+  const close = () => { pop?.remove(); pop = sel = null; };
+  const pick = (i) => {
+    const s = sel; close();
+    if (s.selectedIndex !== i) { s.selectedIndex = i; s.dispatchEvent(new Event('input', { bubbles: true })); s.dispatchEvent(new Event('change', { bubbles: true })); }
+    s.focus();
+  };
+  const move = (d) => {
+    const items = [...pop.children], cur = items.findIndex(x => x.classList.contains('on'));
+    let n = cur; do n = (n + d + items.length) % items.length; while (items[n].dataset.dis && n !== cur);
+    items[cur]?.classList.remove('on'); items[n].classList.add('on'); items[n].scrollIntoView({ block: 'nearest' });
+  };
+  function open(s) {
+    close(); sel = s;
+    pop = document.createElement('div'); pop.className = 'ddl'; pop.setAttribute('role', 'listbox');
+    [...s.options].forEach((o, i) => {
+      const d = document.createElement('div'); d.textContent = o.text; d.setAttribute('role', 'option');
+      if (s.id === 'sx-method') d.className = 'mono m-' + o.value;
+      if (i === s.selectedIndex) d.classList.add('sel', 'on');
+      if (o.disabled) { d.dataset.dis = 1; if (/^[─—-]+$/.test(o.text.trim())) { d.className = 'sep'; d.textContent = ''; } else d.style.opacity = .4; } else d.onmousedown = (e) => { e.preventDefault(); pick(i); };
+      d.onmousemove = () => { pop.querySelector('.on')?.classList.remove('on'); d.classList.add('on'); };
+      pop.append(d);
+    });
+    (s.closest('dialog') || document.body).append(pop);
+    const r = s.getBoundingClientRect(), h = pop.offsetHeight, below = innerHeight - r.bottom - 8;
+    pop.style.minWidth = r.width + 'px';
+    pop.style.left = Math.max(4, Math.min(r.left, innerWidth - pop.offsetWidth - 4)) + 'px';
+    pop.style.top = (h <= below || r.top < h ? r.bottom + 4 : r.top - h - 4) + 'px';
+    pop.querySelector('.on')?.scrollIntoView({ block: 'nearest' });
+  }
+  document.addEventListener('mousedown', (e) => {
+    const s = e.target.closest?.('select');
+    if (pop && !pop.contains(e.target)) { const was = sel; close(); if (s === was) { e.preventDefault(); return; } }
+    if (s && !s.multiple && !s.disabled && e.button === 0) { e.preventDefault(); s.focus(); open(s); }
+  }, true);
+  document.addEventListener('keydown', (e) => {
+    if (pop) {
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') move(e.key === 'ArrowDown' ? 1 : -1);
+      else if (e.key === 'Enter' || e.key === ' ') { const i = [...pop.children].findIndex(x => x.classList.contains('on')); if (i >= 0) pick(i); }
+      else if (e.key === 'Escape' || e.key === 'Tab') { const s = sel; close(); if (e.key === 'Escape') s.focus(); else return; }
+      else return;
+      e.preventDefault(); e.stopPropagation(); return;
+    }
+    const s = e.target;
+    if (s.tagName === 'SELECT' && !s.multiple && (e.key === ' ' || e.key === 'Enter' || (e.altKey && e.key === 'ArrowDown'))) { e.preventDefault(); open(s); }
+  }, true);
+  addEventListener('resize', close); addEventListener('blur', close);
+  document.addEventListener('scroll', (e) => { if (pop && !pop.contains(e.target)) close(); }, true);
+})();

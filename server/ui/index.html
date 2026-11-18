@@ -35,6 +35,26 @@
   html[data-accent=teal] { --accent:#0f766e; --accent-soft:rgba(15,118,110,.11) } html.dark[data-accent=teal] { --accent:#2dd4bf; --accent-soft:rgba(45,212,191,.13) }
   html[data-accent=rose] { --accent:#be185d; --accent-soft:rgba(190,24,93,.10) } html.dark[data-accent=rose] { --accent:#f472b6; --accent-soft:rgba(244,114,182,.13) }
   html[data-accent=blue] { --accent:#1d4ed8; --accent-soft:rgba(29,78,216,.10) } html.dark[data-accent=blue] { --accent:#60a5fa; --accent-soft:rgba(96,165,250,.13) }
+  /* Nord (nordtheme.com): dark mode with Polar Night / Snow Storm / Frost / Aurora. */
+  html.dark.nord {
+    --bg:#2e3440; --mantle:#3b4252; --fg:#d8dee9; --muted:#8a93a6; --card:#3b4252; --onaccent:#2e3440;
+    --bad:#bf616a; --good:#a3be8c; --warn:#ebcb8b; --border:#434c5e; --border2:#4c566a; --track:#3b4252; --hover:#434c5e; --grid:rgba(216,222,233,.06);
+    --p50:#a3be8c; --p95:#ebcb8b; --p99:#bf616a; --rps:#434c5e; --prev:#4c566a; --c4xx:#d08770; --cerr:#bf616a;
+    --ph-dnsMs:#b48ead; --ph-connectMs:#81a1c1; --ph-tlsMs:#ebcb8b; --ph-sendMs:#4c566a; --ph-waitMs:#a3be8c; --ph-recvMs:#8fbcbb;
+    --get:#a3be8c; --post:#81a1c1; --put:#ebcb8b; --patch:#d08770; --del:#bf616a;
+    --j-k:#88c0d0; --j-s:#a3be8c; --j-n:#b48ead; --j-b:#81a1c1;
+  }
+  html.dark.nord[data-accent=amber] { --accent:#88c0d0; --accent-soft:rgba(136,192,208,.16) }
+  /* Fancy Dracula (draculatheme.com): purple accent, Dracula syntax colours. */
+  html.dark.dracula {
+    --bg:#282a36; --mantle:#21222c; --fg:#f8f8f2; --muted:#7f8bb8; --card:#21222c; --onaccent:#282a36;
+    --bad:#ff5555; --good:#50fa7b; --warn:#ffb86c; --border:#363948; --border2:#44475a; --track:#2e3040; --hover:#343746; --grid:rgba(248,248,242,.06);
+    --p50:#50fa7b; --p95:#ffb86c; --p99:#ff5555; --rps:#44475a; --prev:#4d5066; --c4xx:#ffb86c; --cerr:#ff6e6e;
+    --ph-dnsMs:#bd93f9; --ph-connectMs:#8be9fd; --ph-tlsMs:#f1fa8c; --ph-sendMs:#6272a4; --ph-waitMs:#50fa7b; --ph-recvMs:#ff79c6;
+    --get:#50fa7b; --post:#bd93f9; --put:#ffb86c; --patch:#f1fa8c; --del:#ff5555;
+    --j-k:#8be9fd; --j-s:#f1fa8c; --j-n:#bd93f9; --j-b:#ff79c6;
+  }
+  html.dark.dracula[data-accent=amber] { --accent:#bd93f9; --accent-soft:rgba(189,147,249,.16) }
 
   * { box-sizing:border-box }
   html, body { height:100% }
@@ -239,7 +259,7 @@
   .hchip b { color:var(--fg); font-weight:500 } .hchip .live { stroke:var(--good) }
   #sx-env { font:12px 'IBM Plex Sans',sans-serif; padding:.25rem .5rem; background:var(--bg); max-width:200px }
   @media (max-width:1100px) { .hchip.local span { display:none } }
-  .tabs { display:flex; align-items:flex-end; gap:2px; padding:0 10px; border-bottom:1px solid var(--border); overflow-x:auto; overflow-y:hidden; scrollbar-width:thin }
+  .tabs { display:flex; align-items:flex-end; gap:2px; padding:0 10px; border-bottom:1px solid var(--border); overflow-x:auto; overflow-y:hidden }
   .tab { display:flex; gap:7px; align-items:center; height:30px; padding:0 8px 0 12px; border:1px solid transparent; border-bottom:0; border-radius:5px 5px 0 0; color:var(--muted); position:relative; top:1px; cursor:pointer; white-space:nowrap; max-width:220px; flex:none; user-select:none }
   .tab:hover { color:var(--fg) } .tab.on { background:var(--bg); border-color:var(--border); color:var(--fg) }
   .tab .nm { overflow:hidden; text-overflow:ellipsis } .tab .mth { width:auto }
@@ -275,13 +295,32 @@
   .body.noside .side-gut { display:none }
   .nores #sx-split { grid-template-columns:minmax(0,1fr); grid-template-rows:minmax(0,1fr) } .nores #sx-gut, .nores #sx-split > .pane:last-child { display:none }
   #toggle-res .res-off, .nores #toggle-res .res-on { display:none } .nores #toggle-res .res-off { display:block }
-  .ptabs { display:flex; gap:18px; align-items:center; height:40px; padding:0 14px; flex:none; color:var(--muted); white-space:nowrap; overflow-x:auto; overflow-y:hidden; scrollbar-width:none }
+  .ptabs { display:flex; gap:18px; align-items:center; height:40px; padding:0 14px; flex:none; color:var(--muted); white-space:nowrap; overflow-x:auto; overflow-y:hidden }
   .ptabs > button { background:none; color:inherit; border-radius:0; padding:9px 0 7px; border-bottom:2px solid transparent; font-weight:500; flex:none }
   .ptabs > button:hover { color:var(--fg); opacity:1 } .ptabs > button:active { transform:none } .ptabs > button.on { color:var(--fg); border-color:var(--accent) }
   .ptabs sup { font-size:10px; margin-left:2px; color:var(--accent) }
   .resmeta { margin-left:auto; display:flex; gap:12px; align-items:center; font-size:12px; flex:none } .resmeta b { font-weight:600; font-variant-numeric:tabular-nums } .resmeta select { font:12px 'IBM Plex Sans',sans-serif !important; padding:.15rem .4rem !important }
   .rs.s2 { color:var(--good) } .rs.s3 { color:var(--accent) } .rs.s4 { color:var(--warn) } .rs.s5, .rs.s0 { color:var(--bad) }
+  /* Dropdowns: every <select> keeps its native value/change wiring; the open list is the themed
+     .ddl popup from app.js (the native list is drawn by GTK and can't be styled). */
+  .sx select, dialog select { appearance:none; -webkit-appearance:none; cursor:pointer; padding-right:26px !important;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 9px center }
+  .sx .url select#sx-method { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 6px center; padding-right:22px !important }
+  #sx-env { background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' fill='none' stroke='%23888' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M1 1l4 4 4-4'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center }
+  .ddl div.sep { height:1px; padding:0; margin:4px 6px; background:var(--border); cursor:default }
+  .ddl { position:fixed; z-index:60; max-height:min(320px, 50vh); overflow:auto; background:var(--bg); border:1px solid var(--border2); border-radius:6px; box-shadow:var(--shadow); padding:4px; font:13px 'IBM Plex Sans',system-ui,sans-serif; color:var(--fg) }
+  .ddl div { padding:5px 10px; border-radius:4px; cursor:pointer; white-space:nowrap } .ddl div.sel { color:var(--accent); font-weight:600 }
+  .ddl div.on { background:var(--hover) } .ddl div.mono { font:600 12px var(--mono) }
   #sx-reqpane, #sx-respane { flex:1; min-height:0; overflow:auto; padding:4px 14px 14px }
+  /* Thin fixed scrollbar on sidebar, tab rows and panes, visible on hover: a styled bar replaces GTK's overlay bar,
+     which swells on hover/drag. scrollbar-width on these elements would disable it. */
+  :is(.tree, .tabs, .ptabs, #sx-reqpane, #sx-respane)::-webkit-scrollbar { width:3px; height:3px }
+  :is(.tree, .tabs, .ptabs, #sx-reqpane, #sx-respane)::-webkit-scrollbar-track, :is(.tree, .tabs, .ptabs, #sx-reqpane, #sx-respane)::-webkit-scrollbar-corner { background:transparent }
+  /* Thumb shows only while its own area is hovered. Colour comes via a variable: Chromium doesn't
+     repaint the bar for a parent:hover::-webkit-scrollbar-thumb rule, but does when a variable changes. */
+  :is(.tree, .tabs, .ptabs, #sx-reqpane, #sx-respane)::-webkit-scrollbar-thumb { background:var(--sb-thumb, transparent); border-radius:2px }
+  :is(.tree, .tabs, .ptabs, #sx-reqpane, #sx-respane):hover { --sb-thumb:var(--border2) }
   #sx-respane { padding-top:0 }
   .sec { color:var(--muted); margin:6px 0 6px; font-size:12px; display:flex; align-items:center; gap:8px } .sec .link { margin-left:auto; font-size:12px }
   table.kv { border-collapse:separate; border-spacing:0; border:1px solid var(--border); border-radius:5px; table-layout:fixed }
@@ -451,7 +490,7 @@
 <footer class="sbar">
   <div class="dd" id="appear"><button class="sb" id="appear-btn" title="Appearance"><svg class="ico" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6"/><circle cx="5.5" cy="6.5" r=".8"/><circle cx="8.5" cy="5" r=".8"/><circle cx="10.8" cy="7.5" r=".8"/><path d="M8 14c-1 0-1.5-.8-1.5-1.6 0-1 1-1.2 1-2.2"/></svg>Appearance</button>
     <div class="pop"><div class="lbl">Mode</div>
-      <div class="seg2" id="theme-toggle"><button data-theme="light">Light</button><button data-theme="dark">Dark</button><button data-theme="system">System</button></div>
+      <div class="seg2" id="theme-toggle"><button data-theme="light">Light</button><button data-theme="dark">Dark</button><button data-theme="system">System</button><button data-theme="nord">Nord</button></div>
       <div class="lbl">Accent</div>
       <div class="swrow" id="accents"><button data-accent="amber" style="--sw:#d9a342" title="Amber"></button><button data-accent="violet" style="--sw:#a78bfa" title="Violet"></button><button data-accent="teal" style="--sw:#2dd4bf" title="Teal"></button><button data-accent="rose" style="--sw:#f472b6" title="Rose"></button><button data-accent="blue" style="--sw:#60a5fa" title="Blue"></button></div>
     </div></div>
