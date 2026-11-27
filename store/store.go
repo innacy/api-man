@@ -64,6 +64,12 @@ func Open(path string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
+// Reset deletes every saved run with its stages and results.
+func (s *Store) Reset() error {
+	_, err := s.db.Exec(`DELETE FROM results; DELETE FROM stage_summaries; DELETE FROM runs;`)
+	return err
+}
+
 // Close closes the underlying database connection.
 func (s *Store) Close() error {
 	return s.db.Close()

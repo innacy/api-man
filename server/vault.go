@@ -64,11 +64,15 @@ func (v *vault) grant(w http.ResponseWriter) {
 	http.SetCookie(w, &http.Cookie{Name: vaultCookie, Value: v.token, Path: "/", HttpOnly: true, SameSite: http.SameSiteStrictMode})
 }
 
+// vaultOpen are the routes usable while locked. Reset is open on purpose
+// (forgot password) and so must wipe everything the gate protects.
+var vaultOpen = map[string]bool{"/api/vault": true, "/api/vault/init": true, "/api/vault/unlock": true, "/api/vault/reset": true}
+
 // gate blocks /api/* until unlocked, except the vault endpoints and ping.
 func (v *vault) gate(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		p := r.URL.Path
-		if VaultPath == "" || !strings.HasPrefix(p, "/api/") || strings.HasPrefix(p, "/api/vault") || p == "/api/ping" || v.unlocked(r) {
+		if VaultPath == "" || !strings.HasPrefix(p, "/api/") || vaultOpen[p] || p == "/api/ping" || v.unlocked(r) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -139,7 +143,7 @@ func (s *server) vaultRoutes(mux *http.ServeMux, v *vault) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "unlocked"})
 	})
 	mux.HandleFunc("POST /api/vault/reset", func(w http.ResponseWriter, r *http.Request) {
-		if err := s.lib.Reset(); err != nil {
+		if err := errors.Join(s.lib.Reset(), s.st.Reset()); err != nil {
 			writeError(w, http.StatusInternalServerError, err.Error())
 			return
 		}

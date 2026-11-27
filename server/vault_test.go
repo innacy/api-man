@@ -1,6 +1,8 @@
 package server
 
 import (
+	"apiperf/curlparse"
+	"apiperf/metrics"
 	"net/http"
 	"net/http/cookiejar"
 	"path/filepath"
@@ -11,7 +13,7 @@ import (
 func TestVaultGate(t *testing.T) {
 	VaultPath = filepath.Join(t.TempDir(), "vault.json")
 	defer func() { VaultPath = "" }()
-	ts, _ := newTestServer(t)
+	ts, st := newTestServer(t)
 	jar, _ := cookiejar.New(nil)
 	c := &http.Client{Jar: jar}
 	do := func(method, path, body string) int {
@@ -38,6 +40,9 @@ func TestVaultGate(t *testing.T) {
 			t.Fatalf("%s %s = %d, want %d", s.m, s.p, got, s.want)
 		}
 	}
+	if _, err := st.CreateRun("curl http://h", curlparse.Target{URL: "http://h", Method: "GET"}, nil, metrics.AbortRules{}); err != nil {
+		t.Fatal(err)
+	}
 	c.Jar, _ = cookiejar.New(nil) // new launch/session
 	for _, s := range []struct {
 		m, p, b string
@@ -54,5 +59,12 @@ func TestVaultGate(t *testing.T) {
 		if got := do(s.m, s.p, s.b); got != s.want {
 			t.Fatalf("%s %s = %d, want %d", s.m, s.p, got, s.want)
 		}
+	}
+	if runs, _ := st.ListRuns(); len(runs) != 0 {
+		t.Fatalf("reset left %d runs readable", len(runs))
+	}
+	c.Jar, _ = cookiejar.New(nil)
+	if got := do("GET", "/api/vault/x", ""); got != 401 {
+		t.Fatalf("unknown /api/vault* route = %d, want 401", got)
 	}
 }
