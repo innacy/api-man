@@ -4,7 +4,7 @@
   "outputfilename": "apiperf",
   "info": {
     "productName": "API-Man",
-    "productVersion": "0.3.1",
+    "productVersion": "0.3.2",
     "comments": "Send API requests and load-test them"
   }
 }
