@@ -295,6 +295,7 @@ reqPane.addEventListener('input', (e) => {
   }
   if (el.dataset.p) { P[el.dataset.p] = el.value; renderReqPane(); saveState(); return; }
   if (!el.dataset.s) return;
+  if (el.dataset.s === 'body') bodyRecord(S.body, el.selectionStart);
   setPath(el.dataset.s, el.type === 'checkbox' ? el.checked : el.value);
   if (el.dataset.s === 'body' && /^Body is not valid JSON/.test($('#sx-err').textContent)) $('#sx-err').textContent = '';
   if (el.dataset.s === 'auth.type') renderReqPane(); else renderReqTabs();
@@ -351,13 +352,34 @@ function beautify() {
     // Commenting out the last field leaves a trailing comma; still tidy it.
     if (!hasComments) { $('#sx-err').textContent = 'Body is not valid JSON: ' + err.message; return; }
   }
-  S.body = beautifyJSON(S.body); renderReqPane(); saveState(); $('#sx-err').textContent = '';
+  bodyRecord(S.body, 0, true); S.body = beautifyJSON(S.body); renderReqPane(); saveState(); $('#sx-err').textContent = '';
+}
+// Body undo/redo: own per-tab stack so it survives re-renders, tab switches
+// and Beautify (the textarea's native history is lost on each innerHTML).
+// ponytail: in-memory only, gone on reload; edits within 600ms merge into one step.
+const bodyHist = new WeakMap();
+function bodyRecord(v, c, force) {
+  let h = bodyHist.get(S);
+  if (!h) bodyHist.set(S, h = { u: [], r: [], t: 0 });
+  const now = Date.now();
+  if (force || now - h.t > 600) { h.u.push({ v, c }); if (h.u.length > 200) h.u.shift(); }
+  h.t = force ? 0 : now; h.r = [];
+}
+function bodyStep(ta, redo) {
+  const h = bodyHist.get(S), from = h && (redo ? h.r : h.u);
+  if (!from?.length) return;
+  (redo ? h.u : h.r).push({ v: S.body, c: ta.selectionStart });
+  const { v, c } = from.pop();
+  h.t = 0; S.body = ta.value = v; ta.setSelectionRange(c, c);
+  renderReqTabs(); saveState();
 }
 // Body editor keys: Ctrl+/ toggles // on the selected lines (JSON), Tab indents.
 // execCommand keeps the browser's undo history working.
 reqPane.addEventListener('keydown', (e) => {
   const ta = e.target;
   if (!ta.classList?.contains('sx-body')) return;
+  const k = e.key.toLowerCase();
+  if ((e.ctrlKey || e.metaKey) && !e.altKey && (k === 'z' || k === 'y')) { e.preventDefault(); return bodyStep(ta, k === 'y' || e.shiftKey); }
   if ((e.ctrlKey || e.metaKey) && e.key === '/' && S.bodyMode === 'json') {
     e.preventDefault();
     const v = ta.value, a = v.lastIndexOf('\n', ta.selectionStart - 1) + 1;
@@ -929,6 +951,7 @@ $('#sx-tabs').addEventListener('click', (e) => {
   if (t && +t.dataset.tab !== active) switchTab(+t.dataset.tab);
 });
 $('#sx-tabs').addEventListener('auxclick', (e) => { const t = e.target.closest('[data-tab]'); if (t && e.button === 1) closeTab(+t.dataset.tab); });
+$('#sx-tabs').addEventListener('wheel', (e) => { if (e.deltaY && !e.deltaX) { e.currentTarget.scrollLeft += e.deltaY; e.preventDefault(); } }, { passive: false }); // vertical wheel scrolls the tab strip
 $('#sx-tabs').addEventListener('contextmenu', (e) => {
   const t = e.target.closest('[data-tab]');
   if (!t) return;
