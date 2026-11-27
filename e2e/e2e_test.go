@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/http/cookiejar"
 	"net/http/httptest"
 	"os"
 	"os/exec"
@@ -56,6 +57,7 @@ func start(t *testing.T, bin, data string) *app {
 	for i := 0; i < 100; i++ {
 		if res, err := http.Get(base + "/api/ping"); err == nil {
 			res.Body.Close()
+			unlockVault(t)
 			return a
 		}
 		time.Sleep(100 * time.Millisecond)
@@ -63,6 +65,26 @@ func start(t *testing.T, bin, data string) *app {
 	a.cmd.Process.Kill()
 	t.Fatalf("apiperf never answered /api/ping; output:\n%s", a.out)
 	return nil
+}
+
+// unlockVault creates the master password on first launch, unlocks after
+// that; the session cookie lands in http.DefaultClient's jar.
+func unlockVault(t *testing.T) {
+	t.Helper()
+	if http.DefaultClient.Jar == nil {
+		http.DefaultClient.Jar, _ = cookiejar.New(nil)
+	}
+	for _, p := range []string{"/api/vault/init", "/api/vault/unlock"} {
+		res, err := http.Post(base+p, "application/json", strings.NewReader(`{"password":"e2e"}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		res.Body.Close()
+		if res.StatusCode == http.StatusOK {
+			return
+		}
+	}
+	t.Fatal("could not unlock the vault")
 }
 
 // stop shuts the app down the way a user does (Ctrl+C) and checks it exits

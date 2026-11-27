@@ -27,6 +27,7 @@ func main() {
 	headless := flag.Bool("headless", false, "serve http://localhost:7071 only; don't open the app window")
 	flag.Parse()
 	server.Version = version
+	server.VaultPath = filepath.Join(dataDir(), "vault.json")
 	raiseFDLimit()
 
 	// Acquire the port first: it's the process mutex for "am I the only

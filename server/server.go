@@ -175,8 +175,10 @@ func New(st *store.Store, lib *store.Library, o *orch.Orchestrator, hub *Hub) ht
 	mux.HandleFunc("GET /api/update", handleUpdate)
 	mux.HandleFunc("POST /api/update/open", handleOpenUpdate)
 	s.libraryRoutes(mux)
+	v := &vault{}
+	s.vaultRoutes(mux, v)
 
-	return localOnly(mux)
+	return localOnly(v.gate(mux))
 }
 
 // localOnly rejects requests whose Host isn't loopback or whose Origin isn't

@@ -120,6 +120,12 @@ func OpenLibrary(path string) (*Library, error) {
 	return &Library{db: db}, nil
 }
 
+// Reset deletes everything saved: collections, environments, globals, history, cookies.
+func (l *Library) Reset() error {
+	_, err := l.db.Exec(`DELETE FROM requests; DELETE FROM folders; DELETE FROM collections; DELETE FROM environments; DELETE FROM globals; DELETE FROM history; DELETE FROM cookies;`)
+	return err
+}
+
 // Close closes the underlying database.
 func (l *Library) Close() error { return l.db.Close() }
 
