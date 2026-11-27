@@ -8,12 +8,12 @@ import (
 
 func TestParse(t *testing.T) {
 	cases := []struct {
-		name, in                string
-		method, url, body       string
-		header                  map[string]string
-		insecure                bool
-		followRedirects         bool
-		errContains             string
+		name, in          string
+		method, url, body string
+		header            map[string]string
+		insecure          bool
+		followRedirects   bool
+		errContains       string
 	}{
 		{name: "bare get", in: "curl http://localhost:8080/api/health",
 			method: "GET", url: "http://localhost:8080/api/health"},
@@ -37,6 +37,14 @@ func TestParse(t *testing.T) {
 		{name: "no curl prefix", in: `http://h/x`, method: "GET", url: "http://h/x"},
 		{name: "scheme defaults to http", in: `curl localhost:8099/x`,
 			method: "GET", url: "http://localhost:8099/x"},
+		{name: "data-urlencode name=value", in: `curl http://h/x --data-urlencode 'grant_type=client_credentials' --data-urlencode 'scope=a b&c'`,
+			method: "POST", url: "http://h/x", body: "grant_type=client_credentials&scope=a+b%26c",
+			header: map[string]string{"Content-Type": "application/x-www-form-urlencoded"}},
+		{name: "data-urlencode bare content", in: `curl http://h/x --data-urlencode 'a b'`,
+			method: "POST", url: "http://h/x", body: "a+b"},
+		{name: "repeated -d joins with &", in: `curl http://h/x -d a=1 -d b=2 -H 'Content-Type: text/plain'`,
+			method: "POST", url: "http://h/x", body: "a=1&b=2", header: map[string]string{"Content-Type": "text/plain"}},
+		{name: "data-urlencode file", in: `curl http://h/x --data-urlencode name@f.txt`, errContains: "@file"},
 		{name: "unsupported flag", in: `curl --compressed http://h/x`, errContains: "--compressed"},
 		{name: "missing url", in: `curl -X POST`, errContains: "URL"},
 		{name: "bad quoting", in: `curl 'http://h/x`, errContains: ""}, // any error acceptable

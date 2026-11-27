@@ -4,6 +4,7 @@ import (
 	"encoding/base64"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
 	"github.com/google/shlex"
@@ -58,7 +59,7 @@ func Parse(cmd string) (Target, error) {
 		toks = toks[1:]
 	}
 	t := Target{Header: http.Header{}}
-	dataSeen := false
+	dataSeen, urlencoded := false, false
 	next := func(i int, flag string) (string, error) {
 		if i+1 >= len(toks) {
 			return "", fmt.Errorf("flag %s expects a value", flag)
@@ -91,7 +92,28 @@ func Parse(cmd string) (Target, error) {
 			if err != nil {
 				return Target{}, err
 			}
-			t.Body = []byte(v)
+			appendData(&t, v)
+			dataSeen = true
+			i++
+		case tok == "--data-urlencode":
+			v, err := next(i, tok)
+			if err != nil {
+				return Target{}, err
+			}
+			// curl forms: "content", "=content", "name=content"; @file forms need disk access.
+			name, content, hasEq := strings.Cut(v, "=")
+			if !hasEq {
+				name, content = "", v
+			}
+			if strings.HasPrefix(v, "@") || (!hasEq && strings.Contains(v, "@")) {
+				return Target{}, fmt.Errorf("--data-urlencode with @file is not supported")
+			}
+			enc := url.QueryEscape(content)
+			if name != "" {
+				enc = name + "=" + enc
+			}
+			appendData(&t, enc)
+			urlencoded = true
 			dataSeen = true
 			i++
 		case tok == "-u" || tok == "--user":
@@ -127,6 +149,9 @@ func Parse(cmd string) (Target, error) {
 	if !strings.HasPrefix(t.URL, "http://") && !strings.HasPrefix(t.URL, "https://") {
 		t.URL = "http://" + t.URL
 	}
+	if urlencoded && t.Header.Get("Content-Type") == "" {
+		t.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	}
 	if t.Method == "" {
 		if dataSeen {
 			t.Method = "POST"
@@ -135,4 +160,12 @@ func Parse(cmd string) (Target, error) {
 		}
 	}
 	return t, nil
+}
+
+// appendData joins repeated data flags with '&', as curl does.
+func appendData(t *Target, v string) {
+	if len(t.Body) > 0 {
+		t.Body = append(t.Body, '&')
+	}
+	t.Body = append(t.Body, v...)
 }
